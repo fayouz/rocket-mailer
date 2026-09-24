@@ -1,5 +1,19 @@
 # Environnement de démo
 
+## Dans GitHub Codespaces (rien à installer)
+
+1. Sur GitHub, ouvre le dépôt, choisis la branche qui contient la démo, puis **Code → Codespaces → Create codespace on …**.
+2. Attends la fin de la commande de démarrage dans le terminal (5 à 10 minutes au premier lancement, le temps de construire les images). Elle affiche les URLs de la démo.
+3. Dans l'onglet **Ports**, ouvre « Rocket Mailer » (3000), « Démo CRM » (4000) ou « Mailpit » (8025).
+
+Les ports 3000 et 4000 sont rendus publics automatiquement : la page Démo CRM charge le composeur depuis le port 3000. Si ça échoue, passe-les en *Public* (clic droit → *Port Visibility*).
+
+> ⚠️ Un port public est accessible à toute personne qui a l'URL, et les mots de passe de démo sont publics. Arrête le codespace quand tu as fini (menu Codespaces → *Stop codespace*). Le quota gratuit de GitHub est limité en heures par mois.
+
+Pour relancer la démo à la main : `bash demo/codespaces/start.sh`.
+
+## En local
+
 Pré-requis : Docker avec Compose v2.24 ou plus récent.
 
 ```bash

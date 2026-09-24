@@ -1,11 +1,12 @@
 # Demo environment — see demo/README.md
 #   docker compose -f compose.yaml -f compose.demo.yaml up -d --build
+# Public URLs can be overridden with DEMO_HOST_ORIGIN / DEMO_MAILER_URL (see demo/codespaces/start.sh).
 # Everything here is for local demos only: known passwords and a known application token.
 
 x-demo-env: &demo-env
   DEMO_MODE: "1"
   DEMO_APP_TOKEN: &demo-token rma_demo_rocket_mailer_do_not_use_in_production
-  DEMO_HOST_ORIGIN: http://localhost:4000
+  DEMO_HOST_ORIGIN: ${DEMO_HOST_ORIGIN:-http://localhost:4000}
   LDAP_ENABLED: "1"
   LDAP_ADMIN_GROUP_DN: cn=mailer-admins,ou=groups,dc=example,dc=org
   CORS_ALLOW_ORIGIN: ^http://localhost:(3000|4000)$$
@@ -63,12 +64,19 @@ services:
       demo-seed:
         condition: service_completed_successfully
 
+  # The browser only talks to the front, which proxies /api to the API: one public URL is enough
+  # (Codespaces, tunnels…) and no CORS is involved.
+  front:
+    environment:
+      NUXT_PUBLIC_API_BASE: ""
+
   demo-host:
     build: ./demo/host
+    restart: unless-stopped
     environment:
       APP_TOKEN: *demo-token
       API_INTERNAL_URL: http://api:80
-      MAILER_PUBLIC_URL: http://localhost:3000
+      MAILER_PUBLIC_URL: ${DEMO_MAILER_URL:-http://localhost:3000}
       DEMO_USERS: alice@example.org,jean.dupont@example.org,marie.martin@example.org,admin@example.org
     ports:
       - "4000:4000"

@@ -29,7 +29,7 @@ async function allowedOrigins(appId: string): Promise<string[]> {
 
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
-  if (url.pathname.startsWith('/_nuxt/') || url.pathname.startsWith('/__nuxt')) return
+  if (url.pathname.startsWith('/_nuxt/') || url.pathname.startsWith('/__nuxt') || url.pathname.startsWith('/api/')) return
 
   let ancestors = '\'none\''
   if (url.pathname.startsWith('/embed/')) {

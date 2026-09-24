@@ -134,7 +134,7 @@ async function copy(text: string) {
 // Split so the SFC parser does not see a closing script tag.
 const endScript = '</' + 'script>'
 const snippet = computed(() => revealed.value && `# 1. Server side (never expose the application token to the browser)
-curl -X POST ${config.public.apiBase}/api/embed/token \\
+curl -X POST ${config.public.apiBase || requestUrl.origin}/api/embed/token \\
   -H "Authorization: Bearer ${revealed.value.token}" \\
   -H "X-Impersonate-User: jean.dupont@example.org"
 

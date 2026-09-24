@@ -148,22 +148,30 @@ jobs:
         run: |
           $COMPOSE up -d --build
           test "$(docker wait "$($COMPOSE ps -aq demo-seed)")" = 0
-          for i in $(seq 1 60); do curl -fsS http://localhost:4000/ -o /dev/null && break; sleep 2; done
+          for i in $(seq 1 60); do curl -fsS http://localhost:4000/ -o /dev/null && exit 0; sleep 2; done
+          echo "Demo host never became ready" && exit 1
       - name: Check demo scenarios
         run: |
           set -x
-          # Local account
-          curl -fsS -X POST http://localhost:8000/api/auth/login -H 'Content-Type: application/json' \
+          # Local account (through the front's same-origin /api proxy, as in Codespaces)
+          curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -e .token
           # LDAP account, admin through its directory group
-          TOKEN=$(curl -fsS -X POST http://localhost:8000/api/auth/login -H 'Content-Type: application/json' \
+          TOKEN=$(curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"marie.martin@example.org","password":"password"}' | jq -r .token)
-          curl -fsS http://localhost:8000/api/me -H "Authorization: Bearer $TOKEN" | jq -e '.roles | index("ROLE_ADMIN")'
+          curl -fsS http://localhost:3000/api/me -H "Authorization: Bearer $TOKEN" | jq -e '.roles | index("ROLE_ADMIN")'
           # Third-party host: embed token minted server-side, composer frameable only from its origin
           APP_ID=$(curl -fsS http://localhost:4000/ | grep -o 'applicationId: "[^"]*"' | cut -d'"' -f2)
           curl -fsS "http://localhost:4000/token?user=alice%40example.org" | jq -e .token
           curl -fsSI "http://localhost:3000/embed/compose?app=$APP_ID" | grep -i "frame-ancestors http://localhost:4000"
           curl -fsS http://localhost:8025/ -o /dev/null
+          # Sending goes through the async worker and reaches Mailpit
+          ALICE=$(curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
+            -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -r .token)
+          curl -fsS -X POST http://localhost:3000/api/emails -H "Authorization: Bearer $ALICE" -H 'Content-Type: application/json' \
+            -H 'Accept: application/json' -d '{"to":["client@example.com"],"subject":"CI demo","htmlBody":"<p>ok</p>"}' | jq -e '.status == "queued"'
+          for i in $(seq 1 30); do curl -fsS http://localhost:8025/api/v1/messages | jq -e '.messages | map(.Subject) | index("CI demo")' && exit 0; sleep 2; done
+          exit 1
       - name: Logs
         if: failure()
-        run: $COMPOSE logs --no-color --tail=200
+        run: $COMPOSE logs --no-color --tail=80

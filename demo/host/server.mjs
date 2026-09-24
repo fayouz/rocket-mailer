@@ -90,13 +90,18 @@ http.createServer(async (req, res) => {
     }
     if (url.pathname === '/') {
       appIdPromise ??= applicationId().catch((e) => { appIdPromise = undefined; throw e })
+      const html = page(await appIdPromise)
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(page(await appIdPromise))
+      res.end(html)
       return
     }
     res.writeHead(404).end()
   }
   catch (error) {
+    if (res.headersSent) {
+      res.destroy(error)
+      return
+    }
     res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' })
     res.end(`Rocket Mailer n'est pas encore prêt (${error.message}). Réessayez dans quelques secondes.`)
   }
