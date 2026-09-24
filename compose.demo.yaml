@@ -70,6 +70,17 @@ services:
   front:
     environment:
       NUXT_PUBLIC_API_BASE: ""
+      NUXT_PUBLIC_DOCS_URL: ${DEMO_DOCS_URL:-http://localhost:3001}
+      NUXT_PUBLIC_CHANGELOG_URL: ${DEMO_DOCS_URL:-http://localhost:3001}/changelog
+
+  # Documentation site, with the changelog (/changelog).
+  docs:
+    build:
+      context: .
+      dockerfile: docs/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:80"
 
   demo-host:
     build: ./demo/host

@@ -1,6 +1,8 @@
 export default defineNuxtRouteMiddleware(async (to) => {
   // The embed page authenticates itself with a token handed over by the host application.
   if (to.path.startsWith('/embed')) return
+  // Public redirects to the documentation site (docs and changelog).
+  if (to.path === '/changelog' || to.path === '/docs' || to.path.startsWith('/docs/')) return
 
   const auth = useAuth()
 

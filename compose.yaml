@@ -70,6 +70,7 @@ services:
       NUXT_API_INTERNAL_BASE: http://api:80
       NUXT_PUBLIC_MAILPIT_URL: ${PUBLIC_MAILPIT_URL:-http://localhost:8025}
       NUXT_PUBLIC_DOCS_URL: ${PUBLIC_DOCS_URL:-https://github.com/fayouz/rocket-mailer/tree/develop/docs/content}
+      NUXT_PUBLIC_CHANGELOG_URL: ${PUBLIC_CHANGELOG_URL:-https://github.com/fayouz/rocket-mailer/blob/develop/CHANGELOG.md}
     ports:
       - "3000:3000"
     depends_on:

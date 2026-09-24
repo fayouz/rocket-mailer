@@ -20,6 +20,7 @@ export default defineNuxtConfig({
       apiBase: 'http://localhost:8000',
       // Dashboard shortcuts.
       docsUrl: 'https://github.com/fayouz/rocket-mailer/tree/develop/docs/content',
+      changelogUrl: 'https://github.com/fayouz/rocket-mailer/blob/develop/CHANGELOG.md',
       mailpitUrl: '',
     },
   },

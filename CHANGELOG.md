@@ -2,6 +2,13 @@
 
 Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le projet respecte le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Ajouté
+
+- La démo (et Codespaces) lance aussi le site de documentation et le changelog, sur le port 3001.
+- Sur Rocket Mailer, `/docs` et `/changelog` redirigent vers la documentation et le changelog. Le tableau de bord a un raccourci « Nouveautés ».
+
 ## [0.6.0] - 2026-09-24
 
 Un tableau de bord pour suivre la plateforme d'un coup d'œil, et un journal pour retrouver n'importe quel email envoyé.

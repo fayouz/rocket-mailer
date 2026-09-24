@@ -4,7 +4,7 @@
 
 1. Sur GitHub, ouvre le dépôt, choisis la branche qui contient la démo, puis **Code → Codespaces → Create codespace on …**.
 2. Attends la fin de la commande de démarrage dans le terminal (5 à 10 minutes au premier lancement, le temps de construire les images). Elle affiche les URLs de la démo.
-3. Dans l'onglet **Ports**, ouvre « Rocket Mailer » (3000), « Démo CRM » (4000) ou « Mailpit » (8025).
+3. Dans l'onglet **Ports**, ouvre « Rocket Mailer » (3000), « Démo CRM » (4000), « Documentation et changelog » (3001) ou « Mailpit » (8025). Depuis Rocket Mailer, `/docs` et `/changelog` y mènent aussi.
 
 Les ports 3000 et 4000 sont rendus publics automatiquement : la page Démo CRM charge le composeur depuis le port 3000. Si ça échoue, passe-les en *Public* (clic droit → *Port Visibility*).
 
@@ -26,6 +26,7 @@ Le premier démarrage prend quelques minutes (build des images). Le service `dem
 |---|---|
 | http://localhost:3000 | Rocket Mailer |
 | http://localhost:4000 | « Démo CRM », une application tierce qui embarque le composeur |
+| http://localhost:3001 | Documentation, et le changelog sur `/changelog` |
 | http://localhost:8025 | Mailpit : tous les emails envoyés arrivent ici, rien ne part vraiment |
 | http://localhost:8000/api/docs | Documentation de l'API |
 

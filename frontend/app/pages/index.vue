@@ -154,6 +154,7 @@ const STATUS_BADGE = {
 
 const shortcuts = computed(() => [
   { label: 'Documentation', description: 'Guides d’intégration et d’administration', icon: 'i-lucide-book-open', to: config.public.docsUrl, external: true },
+  { label: 'Nouveautés', description: 'Changelog des versions', icon: 'i-lucide-history', to: config.public.changelogUrl, external: true },
   { label: 'API', description: 'OpenAPI et bac à sable', icon: 'i-lucide-braces', to: `${config.public.apiBase}/api/docs`, external: true },
   ...(config.public.mailpitUrl ? [{ label: 'Mailpit', description: 'Boîte de réception de test', icon: 'i-lucide-mail-search', to: config.public.mailpitUrl, external: true }] : []),
   { label: 'Templates', description: 'Éditeur visuel GrapesJS', icon: 'i-lucide-layout-template', to: '/templates', external: false },
