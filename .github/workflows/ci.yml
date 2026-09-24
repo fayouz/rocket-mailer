@@ -135,3 +135,35 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://localhost:3000/login -o /dev/null && break; sleep 1; done
           curl -fsSI http://localhost:3000/login | grep -i "content-security-policy: frame-ancestors 'none'"
           curl -fsS http://localhost:3000/embed.js | grep -q RocketMailer
+
+  demo:
+    name: Demo environment (compose)
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE: docker compose -f compose.yaml -f compose.demo.yaml
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the demo stack
+        run: |
+          $COMPOSE up -d --build
+          test "$(docker wait "$($COMPOSE ps -aq demo-seed)")" = 0
+          for i in $(seq 1 60); do curl -fsS http://localhost:4000/ -o /dev/null && break; sleep 2; done
+      - name: Check demo scenarios
+        run: |
+          set -x
+          # Local account
+          curl -fsS -X POST http://localhost:8000/api/auth/login -H 'Content-Type: application/json' \
+            -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -e .token
+          # LDAP account, admin through its directory group
+          TOKEN=$(curl -fsS -X POST http://localhost:8000/api/auth/login -H 'Content-Type: application/json' \
+            -d '{"email":"marie.martin@example.org","password":"password"}' | jq -r .token)
+          curl -fsS http://localhost:8000/api/me -H "Authorization: Bearer $TOKEN" | jq -e '.roles | index("ROLE_ADMIN")'
+          # Third-party host: embed token minted server-side, composer frameable only from its origin
+          APP_ID=$(curl -fsS http://localhost:4000/ | grep -o 'applicationId: "[^"]*"' | cut -d'"' -f2)
+          curl -fsS "http://localhost:4000/token?user=alice%40example.org" | jq -e .token
+          curl -fsSI "http://localhost:3000/embed/compose?app=$APP_ID" | grep -i "frame-ancestors http://localhost:4000"
+          curl -fsS http://localhost:8025/ -o /dev/null
+      - name: Logs
+        if: failure()
+        run: $COMPOSE logs --no-color --tail=200

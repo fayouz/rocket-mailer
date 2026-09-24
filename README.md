@@ -18,6 +18,10 @@ docker compose exec api php bin/console app:user:create admin@example.org 'un-mo
 - API + documentation OpenAPI : http://localhost:8000/api/docs
 - Emails reçus (Mailpit) : http://localhost:8025
 
+### Démo prête à tester
+
+`docker compose -f compose.yaml -f compose.demo.yaml up -d --build` lance une démo complète : comptes locaux et LDAP, templates, et une application tierce qui embarque le composeur. Voir [demo/README.md](demo/README.md).
+
 ### Développement sans Docker
 
 ```bash

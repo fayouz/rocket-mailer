@@ -103,6 +103,17 @@ class Application
         return $token;
     }
 
+    /** Installs a known secret (demo environment only, see app:demo:seed). */
+    public function useToken(string $token): void
+    {
+        if (!str_starts_with($token, self::TOKEN_PREFIX) || \strlen($token) < 36) {
+            throw new \InvalidArgumentException(\sprintf('An application token must start with "%s" and be at least 36 characters long.', self::TOKEN_PREFIX));
+        }
+
+        $this->tokenHash = self::hashToken($token);
+        $this->tokenHint = substr($token, 0, 10);
+    }
+
     public function getId(): Uuid
     {
         return $this->id;
