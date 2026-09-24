@@ -1,0 +1,22 @@
+{
+  "name": "Rocket Mailer (démo)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb"
+  },
+  "forwardPorts": [3000, 3001, 4000, 8025],
+  "portsAttributes": {
+    "3000": { "label": "Rocket Mailer", "onAutoForward": "notify" },
+    "3001": { "label": "Documentation et changelog", "onAutoForward": "notify" },
+    "4000": { "label": "Démo CRM (application tierce)", "onAutoForward": "notify" },
+    "8025": { "label": "Mailpit (emails envoyés)", "onAutoForward": "notify" },
+    "8000": { "label": "API", "onAutoForward": "silent" },
+    "5432": { "onAutoForward": "ignore" }
+  },
+  "postStartCommand": "bash demo/codespaces/start.sh"
+}
