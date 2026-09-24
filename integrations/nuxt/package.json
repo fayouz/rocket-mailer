@@ -5,16 +5,20 @@
   "license": "MIT",
   "type": "module",
   "main": "./nuxt.config.ts",
-  "files": ["app", "server", "nuxt.config.ts", "types.d.ts"],
+  "files": [
+    "app",
+    "server",
+    "nuxt.config.ts",
+    "types.d.ts"
+  ],
   "scripts": {
     "dev": "nuxi dev .playground --port 3002",
     "build": "nuxt build .playground",
     "typecheck": "nuxi typecheck .playground"
   },
-  "peerDependencies": {
-    "nuxt": "^4.0.0"
-  },
   "devDependencies": {
+    "cac": "^6.7.14",
+    "commander": "^15.0.0",
     "nuxt": "^4.5.2",
     "typescript": "^5.9.0",
     "vue-tsc": "^3.0.0"
