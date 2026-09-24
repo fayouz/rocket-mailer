@@ -73,11 +73,13 @@ final class DemoSeedCommand
         $application->useToken($this->demoAppToken);
         $this->em->persist($application);
 
-        foreach ($this->templateFixtures() as [$name, $description, $subject, $html]) {
+        foreach ($this->templateFixtures() as [$name, $description, $subject, $html, $variables]) {
             $template = $this->templates->findOneBy(['name' => $name]) ?? new EmailTemplate();
-            if (null === $template->getOwner()) {
+            // New, or seeded before template variables existed: (re)load the fixture.
+            $outdated = [] !== $variables && [] === array_filter($template->getVariables(), static fn (array $v) => null !== $v['label']);
+            if (null === $template->getOwner() || $outdated) {
                 $template->setName($name)->setDescription($description)->setDefaultSubject($subject)
-                    ->setHtml($html)->setShared(true)->setOwner($admin);
+                    ->setHtml($html)->setVariables($variables)->setShared(true)->setOwner($template->getOwner() ?? $admin);
                 $this->em->persist($template);
             }
         }
@@ -92,7 +94,7 @@ final class DemoSeedCommand
         return Command::SUCCESS;
     }
 
-    /** @return list<array{string, string, string, string}> */
+    /** @return list<array{string, string, string, string, list<array{name: string, label: string, defaultValue?: string}>}> */
     private function templateFixtures(): array
     {
         $layout = static fn (string $title, string $body, string $cta) => <<<HTML
@@ -118,12 +120,20 @@ final class DemoSeedCommand
                 'Message d\'accueil pour un nouveau client.',
                 'Bienvenue chez nous !',
                 $layout('Bienvenue !', '<p>Bonjour,</p><p>Nous sommes ravis de vous compter parmi nos clients. Votre espace est prêt : vous pouvez dès maintenant suivre vos commandes et vos factures.</p>', 'Accéder à mon espace'),
+                [],
             ],
             [
                 'Relance devis',
-                'Relance d\'un devis envoyé et resté sans réponse.',
-                'Votre devis est toujours disponible',
-                $layout('Votre devis vous attend', '<p>Bonjour,</p><p>Nous revenons vers vous au sujet du devis que nous vous avons transmis. Il reste valable encore <strong>15 jours</strong>.</p><p>Avez-vous des questions ? Nous sommes à votre disposition.</p>', 'Consulter le devis'),
+                'Relance d\'un devis envoyé et resté sans réponse. Variables : client, numéro, montant et validité du devis.',
+                'Votre devis n°{{ devis.numero }} est toujours disponible',
+                $layout('Votre devis vous attend', '<p>Bonjour {{ client.prenom }},</p><p>Nous revenons vers vous au sujet du devis n°{{ devis.numero }} d\'un montant de <strong>{{ devis.montant }}</strong>, transmis à {{ client.societe }}. Il reste valable encore <strong>{{ devis.validite }}</strong>.</p><p>Avez-vous des questions ? Nous sommes à votre disposition.</p>', 'Consulter le devis'),
+                [
+                    ['name' => 'client.prenom', 'label' => 'Prénom du client'],
+                    ['name' => 'client.societe', 'label' => 'Société'],
+                    ['name' => 'devis.numero', 'label' => 'Numéro du devis'],
+                    ['name' => 'devis.montant', 'label' => 'Montant du devis'],
+                    ['name' => 'devis.validite', 'label' => 'Validité restante', 'defaultValue' => '15 jours'],
+                ],
             ],
         ];
     }

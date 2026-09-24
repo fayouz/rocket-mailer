@@ -41,10 +41,20 @@ export interface Application extends Tracked {
   lastUsedAt: string | null
 }
 
+/** A "{{ name }}" placeholder of a template. */
+export interface TemplateVariable {
+  name: string
+  label: string | null
+  defaultValue: string | null
+  /** Present in the content or the subject (false: declared but unused). */
+  used?: boolean
+}
+
 export interface EmailTemplateSummary extends Tracked {
   id: string
   name: string
   description: string | null
+  variables: TemplateVariable[]
   defaultSubject: string | null
   shared: boolean
   owner: UserSummary
@@ -121,6 +131,8 @@ export interface EmailDraft {
   template: string | null
   /** Ids of attachments already uploaded for this user (e.g. by the host application's backend). */
   attachments: string[]
+  /** Values of the template variables, flat ({ "client.firstName": "Jean" }) or nested ({ client: { firstName: "Jean" } }). */
+  variables?: Record<string, unknown>
 }
 
 export type ServiceStatus = 'operational' | 'degraded' | 'down' | 'disabled'

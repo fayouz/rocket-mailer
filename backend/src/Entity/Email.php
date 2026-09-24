@@ -23,6 +23,7 @@ use Symfony\Component\Mime\Address;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity(repositoryClass: EmailRepository::class)]
 #[ORM\Index(fields: ['status'])]
@@ -96,16 +97,25 @@ class Email
     #[Groups(['email:read', 'email:write'])]
     private array $bcc = [];
 
+    /** Optional with a template: its default subject is used (see EmailSendProcessor). */
     #[ORM\Column(length: 255)]
-    #[Assert\NotBlank]
     #[Assert\Length(max: 255)]
     #[Groups(['email:list', 'email:write'])]
     private string $subject = '';
 
+    /** Optional with a template: its content is used (see EmailSendProcessor). */
     #[ORM\Column(type: Types::TEXT)]
-    #[Assert\NotBlank]
     #[Groups(['email:read', 'email:write'])]
     private string $htmlBody = '';
+
+    /**
+     * Values of the template variables ("{{ name }}"), flat ({"client.firstName": "Jean"}) or nested
+     * ({"client": {"firstName": "Jean"}}). Applied to the subject and the body before sending; not stored.
+     *
+     * @var array<mixed>
+     */
+    #[Groups(['email:write'])]
+    private array $variables = [];
 
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
@@ -262,6 +272,35 @@ class Email
         $this->subject = $subject;
 
         return $this;
+    }
+
+    /** @return array<mixed> */
+    public function getVariables(): array
+    {
+        return $this->variables;
+    }
+
+    /** @param array<mixed> $variables */
+    public function setVariables(array $variables): static
+    {
+        $this->variables = $variables;
+
+        return $this;
+    }
+
+    #[Assert\Callback]
+    public function validateContent(ExecutionContextInterface $context): void
+    {
+        // Without a template, the subject and the body must be given.
+        if (null !== $this->template) {
+            return;
+        }
+        if ('' === trim($this->subject)) {
+            $context->buildViolation('This value should not be blank.')->atPath('subject')->addViolation();
+        }
+        if ('' === trim($this->htmlBody)) {
+            $context->buildViolation('This value should not be blank.')->atPath('htmlBody')->addViolation();
+        }
     }
 
     public function getHtmlBody(): string

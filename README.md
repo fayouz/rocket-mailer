@@ -102,6 +102,7 @@ Sécurité du composeur embarqué :
 - Éditeur visuel GrapesJS (preset newsletter). On stocke le projet GrapesJS (réédition) et le HTML email avec CSS inliné (import).
 - Import dans le composeur via « Importer un template » : le contenu arrive dans CKEditor, qui conserve le balisage d'email grâce à General HTML Support.
 - Templates privés ou partagés ; seul le propriétaire (ou un admin) les modifie.
+- **Variables** `{{ client.prenom }}` : insérées avec le bouton **{x}** de l'éditeur, avec un libellé et une valeur par défaut. Les valeurs viennent du composeur, de l'application qui l'embarque (`setDraft({ template, variables })`) ou de l'API (`POST /api/emails` avec `template` et `variables`).
 - **Versionnés** (Gedmo Loggable) : `GET /api/email_templates/{id}/versions` et `POST …/versions/{n}/restore`.
 
 ### Traçabilité

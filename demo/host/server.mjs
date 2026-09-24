@@ -43,7 +43,8 @@ function page(appId) {
     <select id="user">${options}</select>
     <div class="client"><strong>Client : Société Exemple</strong><br>client@example.com<br>Devis n°42 en attente
       <button id="prefill">Écrire à ce client</button>
-      <button id="quote">Envoyer le devis (PDF joint)</button></div>
+      <button id="quote">Envoyer le devis (PDF joint)</button>
+      <button id="remind">Relancer le devis (template + variables)</button></div>
     <div id="log">Événements du widget :</div>
   </aside>
   <section><div id="mailer"></div></section>
@@ -76,6 +77,20 @@ function page(appId) {
     const attachment = await response.json()
     log('devis joint : ' + attachment.filename)
     widget.setDraft({ from: FROM, to: ['client@example.com'], subject: 'Votre devis n°42', attachments: [attachment.id] })
+  })
+  // Template variables: the CRM knows the client and the quote, the composer fills "{{ … }}" with them.
+  document.getElementById('remind').addEventListener('click', async () => {
+    const user = document.getElementById('user').value
+    const response = await fetch('/template?name=' + encodeURIComponent('Relance devis') + '&user=' + encodeURIComponent(user))
+    if (!response.ok) return log('erreur : template introuvable (' + response.status + ')')
+    const template = await response.json()
+    log('template « ' + template.name + ' » avec variables')
+    widget.setDraft({
+      from: FROM,
+      to: ['client@example.com'],
+      template: template.id,
+      variables: { client: { prenom: 'Claire', societe: 'Société Exemple' }, devis: { numero: '42', montant: '1 250 €' } },
+    })
   })
   mount()
 </script>
@@ -125,6 +140,21 @@ http.createServer(async (req, res) => {
       })
       res.writeHead(response.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       res.end(await response.text())
+      return
+    }
+    // Looks a template up by name, as the CRM user (templates are listed with the application token).
+    if (url.pathname === '/template') {
+      const user = url.searchParams.get('user')
+      if (!USERS.includes(user)) {
+        res.writeHead(400).end()
+        return
+      }
+      const response = await fetch(`${API}/api/email_templates?itemsPerPage=200`, {
+        headers: { 'Authorization': `Bearer ${APP_TOKEN}`, 'X-Impersonate-User': user, 'Accept': 'application/json' },
+      })
+      const template = response.ok ? (await response.json()).find(t => t.name === url.searchParams.get('name')) : undefined
+      res.writeHead(template ? 200 : 404, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      res.end(JSON.stringify(template ? { id: template.id, name: template.name } : { error: 'not found' }))
       return
     }
     if (url.pathname === '/token') {

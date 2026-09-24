@@ -6,8 +6,24 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Variables de template** : `{{ client.prenom }}`, `{{ devis.numero }}`…
+  - dans l'éditeur, le bouton **{x}** de la barre de texte insère une variable ; le bouton **Variables** leur donne un libellé et une valeur par défaut ;
+  - dans le composeur, un encadré **Variables à compléter** liste celles qui restent, et l'envoi est bloqué tant qu'il en reste ;
+  - l'application qui embarque le composeur passe les valeurs avec `setDraft({ template, variables })` : le composeur charge le template et fait le remplacement ;
+  - par l'API, `POST /api/emails` accepte `template` et `variables` sans `subject` ni `htmlBody` ; une variable manquante donne une erreur `422`.
+- Démo CRM : bouton « Relancer le devis (template + variables) ».
+
 - La démo (et Codespaces) lance aussi le site de documentation et le changelog, sur le port 3001.
 - Sur Rocket Mailer, `/docs` et `/changelog` redirigent vers la documentation et le changelog. Le tableau de bord a un raccourci « Nouveautés ».
+
+### Corrigé
+
+- Éditeur de templates : le texte en cours de modification n'était pas enregistré si l'on cliquait sur « Enregistrer » sans quitter le bloc.
+- Un nouveau template commence par un bloc de texte directement modifiable.
+
+### Sécurité
+
+- Les valeurs des variables sont insérées comme du texte (HTML échappé), et sur une seule ligne dans l'objet.
 
 ## [0.6.0] - 2026-09-24
 

@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\EmailTemplateRepository;
+use App\Template\Placeholders;
 use App\State\EmailTemplateProcessor;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
@@ -17,6 +18,7 @@ use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity(repositoryClass: EmailTemplateRepository::class)]
 #[Gedmo\Loggable(logEntryClass: EmailTemplateVersion::class)]
@@ -72,6 +74,15 @@ class EmailTemplate
     #[Gedmo\Versioned]
     #[Groups(['template:list', 'template:write'])]
     private bool $shared = false;
+
+    /**
+     * Declared variables ("{{ name }}" placeholders): label and default value shown to whoever fills them.
+     *
+     * @var list<array{name: string, label: ?string, defaultValue: ?string}>
+     */
+    #[ORM\Column(type: Types::JSON, options: ['default' => '[]'])]
+    #[Gedmo\Versioned]
+    private array $variables = [];
 
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
@@ -160,6 +171,75 @@ class EmailTemplate
         $this->shared = $shared;
 
         return $this;
+    }
+
+    /**
+     * Declared variables, then the placeholders used in the content or the subject without being declared.
+     *
+     * @return list<array{name: string, label: ?string, defaultValue: ?string, used: bool}>
+     */
+    #[Groups(['template:list'])]
+    public function getVariables(): array
+    {
+        $used = Placeholders::names($this->defaultSubject, $this->html);
+        $variables = array_map(static fn (array $v) => $v + ['used' => \in_array($v['name'], $used, true)], $this->variables);
+        $declared = array_column($this->variables, 'name');
+        foreach (array_diff($used, $declared) as $name) {
+            $variables[] = ['name' => $name, 'label' => null, 'defaultValue' => null, 'used' => true];
+        }
+
+        return $variables;
+    }
+
+    /** @param list<array{name?: mixed, label?: mixed, defaultValue?: mixed}> $variables */
+    #[Groups(['template:write'])]
+    public function setVariables(array $variables): static
+    {
+        $this->variables = [];
+        foreach ($variables as $variable) {
+            $name = trim((string) ($variable['name'] ?? ''));
+            if ('' === $name || \in_array($name, array_column($this->variables, 'name'), true)) {
+                continue;
+            }
+            $label = trim((string) ($variable['label'] ?? ''));
+            $default = $variable['defaultValue'] ?? null;
+            $this->variables[] = [
+                'name' => $name,
+                'label' => '' === $label ? null : mb_substr($label, 0, 150),
+                'defaultValue' => null === $default || '' === (string) $default ? null : mb_substr((string) $default, 0, 1000),
+            ];
+        }
+
+        return $this;
+    }
+
+    /** @return array<string, string> default values of the declared variables */
+    public function getVariableDefaults(): array
+    {
+        $defaults = [];
+        foreach ($this->variables as $variable) {
+            if (null !== $variable['defaultValue']) {
+                $defaults[$variable['name']] = $variable['defaultValue'];
+            }
+        }
+
+        return $defaults;
+    }
+
+    #[Assert\Callback]
+    public function validateVariables(ExecutionContextInterface $context): void
+    {
+        foreach ($this->variables as $index => $variable) {
+            if (!Placeholders::isValidName($variable['name'])) {
+                $context->buildViolation('"{{ name }}" is not a valid variable name: use letters, digits, "_" and "." (e.g. client.firstName).')
+                    ->setParameter('{{ name }}', $variable['name'])
+                    ->atPath("variables[$index].name")
+                    ->addViolation();
+            }
+        }
+        if (\count($this->variables) > 50) {
+            $context->buildViolation('50 variables at most.')->atPath('variables')->addViolation();
+        }
     }
 
     public function getOwner(): ?User

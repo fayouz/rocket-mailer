@@ -9,6 +9,7 @@ use App\Message\SendEmailMessage;
 use App\Security\ActorContext;
 use App\Security\Roles;
 use App\Sender\SenderPolicy;
+use App\Template\Placeholders;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -44,6 +45,7 @@ final class EmailSendProcessor implements ProcessorInterface
         if (null !== $template && !$template->isShared() && $template->getOwner() !== $user && !$this->security->isGranted(Roles::ADMIN)) {
             throw new AccessDeniedHttpException('You cannot use this template.');
         }
+        $this->renderContent($data);
 
         $totalSize = 0;
         foreach ($data->getAttachments() as $attachment) {
@@ -69,5 +71,43 @@ final class EmailSendProcessor implements ProcessorInterface
         $this->bus->dispatch(new SendEmailMessage($email->getId()->toRfc4122()));
 
         return $email;
+    }
+
+    /**
+     * Fills the subject and the body from the template when they are missing, then replaces the variables.
+     * Every variable of the template must end up with a value (given, or its default): no "{{ … }}" is ever sent.
+     */
+    private function renderContent(Email $email): void
+    {
+        $template = $email->getTemplate();
+        if (null !== $template) {
+            if ('' === trim($email->getHtmlBody())) {
+                $email->setHtmlBody($template->getHtml());
+            }
+            if ('' === trim($email->getSubject())) {
+                $email->setSubject($template->getDefaultSubject() ?? '');
+            }
+        }
+
+        $values = Placeholders::flatten($email->getVariables()) + ($template?->getVariableDefaults() ?? []);
+        if ($values) {
+            $email->setSubject(Placeholders::render($email->getSubject(), $values, html: false));
+            $email->setHtmlBody(Placeholders::render($email->getHtmlBody(), $values, html: true));
+        }
+
+        if (null !== $template) {
+            $expected = array_column($template->getVariables(), 'name');
+            $missing = array_values(array_intersect($expected, Placeholders::names($email->getSubject(), $email->getHtmlBody())));
+            if ($missing) {
+                throw new UnprocessableEntityHttpException(\sprintf('Missing template variables: %s.', implode(', ', $missing)));
+            }
+        }
+
+        if ('' === trim($email->getSubject()) || mb_strlen($email->getSubject()) > 255) {
+            throw new UnprocessableEntityHttpException('subject: the subject is required (255 characters at most); this template has no default subject.');
+        }
+        if ('' === trim($email->getHtmlBody())) {
+            throw new UnprocessableEntityHttpException('htmlBody: the content is required.');
+        }
     }
 }

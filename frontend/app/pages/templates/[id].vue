@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EmailTemplate, TemplateVersion } from '~/types/api'
+import type { EmailTemplate, TemplateVariable, TemplateVersion } from '~/types/api'
 
 const route = useRoute()
 const api = useApi()
@@ -12,15 +12,65 @@ const isNew = computed(() => id.value === 'new')
 const meta = reactive({ name: '', description: '', defaultSubject: '', shared: false })
 const template = ref<EmailTemplate | null>(null)
 const editorKey = ref(0)
-const editor = useTemplateRef<{ getData: () => { html: string, projectData: Record<string, unknown> } }>('editor')
+const editor = useTemplateRef<{
+  getData: () => Promise<{ html: string, projectData: Record<string, unknown> }>
+  getHtml: () => Promise<string>
+  insertVariable: (name: string) => void
+}>('editor')
 const saving = ref(false)
 const dirty = ref(false)
+
+// Variables: "{{ name }}" placeholders, filled by the composer or by the application that sends the email.
+const variables = ref<TemplateVariable[]>([])
+const variablesOpen = ref(false)
+const pickerOpen = ref(false)
+const newVariable = ref('')
+
+/** Adds the placeholders typed in the content or the subject that are not declared yet. */
+function syncVariables(html: string) {
+  const declared = new Set(variables.value.map(v => v.name))
+  for (const name of placeholderNames(meta.defaultSubject, html)) {
+    if (!declared.has(name)) variables.value.push({ name, label: null, defaultValue: null })
+  }
+}
+
+const usedVariables = ref<string[]>([])
+async function openVariables() {
+  const html = await editor.value?.getHtml() ?? ''
+  syncVariables(html)
+  usedVariables.value = placeholderNames(meta.defaultSubject, html)
+  variablesOpen.value = true
+}
+
+function addVariable(name: string): boolean {
+  const trimmed = name.trim()
+  if (!VARIABLE_NAME.test(trimmed)) {
+    toast.add({ title: 'Nom de variable invalide', description: 'Lettres, chiffres, « _ » et « . » : par exemple client.prenom', color: 'warning' })
+    return false
+  }
+  if (!variables.value.some(v => v.name === trimmed)) variables.value.push({ name: trimmed, label: null, defaultValue: null })
+  dirty.value = true
+  return true
+}
+
+function insertVariable(name: string) {
+  if (!addVariable(name)) return
+  editor.value?.insertVariable(name.trim())
+  pickerOpen.value = false
+  newVariable.value = ''
+}
+
+function removeVariable(index: number) {
+  variables.value.splice(index, 1)
+  dirty.value = true
+}
 
 const canEdit = computed(() => isNew.value || auth.isAdmin.value || template.value?.owner.id === auth.me.value?.user?.id)
 
 async function load() {
   if (isNew.value) return
   template.value = await api<EmailTemplate>(`/api/email_templates/${id.value}`)
+  variables.value = template.value.variables.map(({ name, label, defaultValue }) => ({ name, label, defaultValue }))
   Object.assign(meta, {
     name: template.value.name,
     description: template.value.description ?? '',
@@ -48,11 +98,14 @@ async function save() {
   }
   saving.value = true
   try {
+    const content = await editor.value!.getData()
+    syncVariables(content.html)
     const body = {
       ...meta,
       description: meta.description || null,
       defaultSubject: meta.defaultSubject || null,
-      ...editor.value!.getData(),
+      variables: variables.value.filter(v => v.name.trim()),
+      ...content,
     }
     const saved = isNew.value
       ? await api<EmailTemplate>('/api/email_templates', { method: 'POST', body })
@@ -76,7 +129,7 @@ const versions = ref<TemplateVersion[]>([])
 const restoring = ref<number | null>(null)
 
 const fieldLabels: Record<string, string> = {
-  name: 'nom', description: 'description', defaultSubject: 'objet', html: 'contenu', projectData: 'mise en page', shared: 'partage',
+  name: 'nom', description: 'description', defaultSubject: 'objet', html: 'contenu', projectData: 'mise en page', shared: 'partage', variables: 'variables',
 }
 
 async function openHistory() {
@@ -113,6 +166,14 @@ onBeforeRouteLeave(() => {
           <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" to="/templates" aria-label="Retour" />
         </template>
         <template #right>
+          <UButton
+            icon="i-lucide-braces"
+            :label="`Variables${variables.length ? ` (${variables.length})` : ''}`"
+            color="neutral"
+            variant="outline"
+            data-testid="variables-button"
+            @click="openVariables"
+          />
           <UButton
             v-if="!isNew"
             icon="i-lucide-history"
@@ -156,8 +217,67 @@ onBeforeRouteLeave(() => {
           :html="template?.html"
           class="flex-1"
           @change="dirty = true"
+          @variable-request="pickerOpen = true"
         />
       </ClientOnly>
+
+      <UModal v-model:open="pickerOpen" title="Insérer une variable" description="Elle sera remplacée par sa valeur à l’envoi, par exemple le prénom du client.">
+        <template #body>
+          <div class="flex flex-col gap-4">
+            <ul v-if="variables.length" class="flex flex-col gap-1" data-testid="variable-choices">
+              <li v-for="variable in variables" :key="variable.name">
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  class="w-full justify-between"
+                  @click="insertVariable(variable.name)"
+                >
+                  <span>{{ variable.label || variable.name }}</span>
+                  <code class="text-xs text-muted">{{ `{{ ${variable.name} }\u007d` }}</code>
+                </UButton>
+              </li>
+            </ul>
+            <form class="flex items-end gap-2" @submit.prevent="insertVariable(newVariable)">
+              <UFormField label="Nouvelle variable" hint="ex. client.prenom" class="flex-1">
+                <UInput v-model="newVariable" placeholder="client.prenom" class="w-full" autofocus data-testid="new-variable" />
+              </UFormField>
+              <UButton type="submit" label="Insérer" :disabled="!newVariable.trim()" />
+            </form>
+          </div>
+        </template>
+      </UModal>
+
+      <USlideover v-model:open="variablesOpen" title="Variables du template" :ui="{ content: 'max-w-2xl' }">
+        <template #body>
+          <div class="flex flex-col gap-4 text-sm">
+            <p class="text-muted">
+              Écrivez <code>{{ '{{ client.prenom }\u007d' }}</code> dans le texte ou l’objet, ou utilisez le bouton <code>{x}</code> de la barre d’édition du texte.
+              À l’envoi, chaque variable est remplacée par la valeur donnée par le composeur ou par l’application, sinon par sa valeur par défaut.
+            </p>
+            <div v-for="(variable, index) in variables" :key="index" class="grid grid-cols-1 gap-2 rounded-md border border-default p-3 sm:grid-cols-[1fr_1fr_1fr_auto]" data-testid="variable-row">
+              <UFormField label="Nom">
+                <UInput v-model="variable.name" :disabled="!canEdit" class="w-full font-mono" @update:model-value="dirty = true" />
+              </UFormField>
+              <UFormField label="Libellé">
+                <UInput :model-value="variable.label ?? ''" :disabled="!canEdit" placeholder="Prénom du client" class="w-full" @update:model-value="(v: string) => { variable.label = v || null; dirty = true }" />
+              </UFormField>
+              <UFormField label="Valeur par défaut">
+                <UInput :model-value="variable.defaultValue ?? ''" :disabled="!canEdit" placeholder="Aucune : obligatoire" class="w-full" @update:model-value="(v: string) => { variable.defaultValue = v || null; dirty = true }" />
+              </UFormField>
+              <div class="flex items-end gap-1 pb-1">
+                <UBadge v-if="!usedVariables.includes(variable.name)" label="Inutilisée" color="warning" variant="subtle" size="sm" />
+                <UButton v-if="canEdit" icon="i-lucide-trash-2" color="neutral" variant="ghost" aria-label="Retirer" @click="removeVariable(index)" />
+              </div>
+            </div>
+            <form v-if="canEdit" class="flex items-end gap-2" @submit.prevent="addVariable(newVariable) && (newVariable = '')">
+              <UFormField label="Ajouter une variable" class="flex-1">
+                <UInput v-model="newVariable" placeholder="client.prenom" class="w-full font-mono" />
+              </UFormField>
+              <UButton type="submit" icon="i-lucide-plus" label="Ajouter" color="neutral" variant="outline" :disabled="!newVariable.trim()" />
+            </form>
+          </div>
+        </template>
+      </USlideover>
 
       <USlideover v-model:open="historyOpen" title="Historique des versions">
         <template #body>
