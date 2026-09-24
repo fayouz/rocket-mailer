@@ -8,6 +8,7 @@ use App\Entity\Email;
 use App\Message\SendEmailMessage;
 use App\Security\ActorContext;
 use App\Security\Roles;
+use App\Sender\SenderPolicy;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -27,6 +28,7 @@ final class EmailSendProcessor implements ProcessorInterface
         private readonly ActorContext $actor,
         private readonly Security $security,
         private readonly MessageBusInterface $bus,
+        private readonly SenderPolicy $senders,
         #[Autowire(env: 'int:ATTACHMENTS_MAX_TOTAL_SIZE')] private readonly int $maxTotalAttachmentSize,
     ) {
     }
@@ -34,6 +36,9 @@ final class EmailSendProcessor implements ProcessorInterface
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): Email
     {
         $user = $this->actor->requireUser();
+        $application = $this->actor->getApplication();
+        // First: resolving may flush (first-run seeding of the sender addresses).
+        $data->applyFrom($this->senders->resolve($data->getRequestedFrom(), $user, $application));
 
         $template = $data->getTemplate();
         if (null !== $template && !$template->isShared() && $template->getOwner() !== $user && !$this->security->isGranted(Roles::ADMIN)) {
@@ -58,7 +63,7 @@ final class EmailSendProcessor implements ProcessorInterface
         }
 
         $data->setSender($user);
-        $data->setApplication($this->actor->getApplication());
+        $data->setApplication($application);
 
         $email = $this->persist->process($data, $operation, $uriVariables, $context);
         $this->bus->dispatch(new SendEmailMessage($email->getId()->toRfc4122()));

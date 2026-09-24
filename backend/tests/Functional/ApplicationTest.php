@@ -97,7 +97,9 @@ final class ApplicationTest extends WebTestCase
         self::assertSame('sent', $email['status']);
         self::assertEmailCount(1);
         $message = self::getMailerMessage();
-        self::assertEmailAddressContains($message, 'From', 'alice@example.org');
+        // Sent from the default address of the settings; replies reach the user.
+        self::assertEmailAddressContains($message, 'From', 'no-reply@example.test');
+        self::assertEmailAddressContains($message, 'Reply-To', 'alice@example.org');
         self::assertEmailAddressContains($message, 'To', 'client@example.com');
 
         $list = $this->api('GET', '/api/emails', authorization: 'Bearer '.$this->jwtFor($alice));

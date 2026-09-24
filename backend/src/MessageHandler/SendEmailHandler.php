@@ -7,7 +7,6 @@ use App\Enum\EmailStatus;
 use App\Message\SendEmailMessage;
 use App\Repository\EmailRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
@@ -22,9 +21,6 @@ final class SendEmailHandler
         private readonly MailerInterface $mailer,
         private readonly EntityManagerInterface $em,
         private readonly AttachmentStorage $storage,
-        /** When set, emails are sent from this address (with the user's name) and replies go to the user. */
-        #[Autowire(env: 'MAILER_SENDER')]
-        private readonly string $enforcedSender,
     ) {
     }
 
@@ -56,10 +52,11 @@ final class SendEmailHandler
             $mime->attachFromPath($path, $attachment->getFilename(), $attachment->getMimeType());
         }
 
-        if ('' !== $this->enforcedSender) {
-            $mime->from(new Address($this->enforcedSender, $sender->getDisplayName()))->replyTo($userAddress);
-        } else {
-            $mime->from($userAddress);
+        // Replies reach the user even when the email leaves from a shared address.
+        $from = $email->getFromAddress() ?? $userAddress;
+        $mime->from($from);
+        if ($from->getAddress() !== $sender->getEmail()) {
+            $mime->replyTo($userAddress);
         }
 
         try {

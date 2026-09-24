@@ -6,7 +6,7 @@ parameters:
     env(LDAP_SEARCH_PASSWORD): ''
     env(LDAP_USER_FILTER): '(objectClass=inetOrgPerson)'
     env(LDAP_ADMIN_GROUP_DN): ''
-    env(MAILER_SENDER): ''
+    env(MAILER_DEFAULT_FROM): ''
     env(EMBED_TOKEN_TTL): '900'
     env(ATTACHMENTS_DIR): '%kernel.project_dir%/var/attachments'
     env(ATTACHMENT_MAX_SIZE): '10485760'

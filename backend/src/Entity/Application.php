@@ -72,6 +72,17 @@ class Application
     #[Groups(['app:read', 'app:write'])]
     private array $allowedOrigins = [];
 
+    /**
+     * "From" addresses this application may impose on the fly, besides the settings' sender addresses:
+     * exact addresses or whole domains ("*@crm.example.com").
+     *
+     * @var list<string>
+     */
+    #[ORM\Column(options: ['default' => '[]'])]
+    #[Assert\All([new Assert\Regex(pattern: '/^(\*|[^@\s*]+)@[a-z0-9-]+(\.[a-z0-9-]+)+$/i', message: 'Use an email address or "*@domain".')])]
+    #[Groups(['app:read', 'app:write'])]
+    private array $allowedSenders = [];
+
     #[ORM\Column]
     #[Groups(['app:read', 'app:write'])]
     private bool $enabled = true;
@@ -183,6 +194,37 @@ class Application
         $this->allowedOrigins = array_values(array_unique(array_map(static fn (string $o) => rtrim(trim($o), '/'), $allowedOrigins)));
 
         return $this;
+    }
+
+    /** @return list<string> */
+    public function getAllowedSenders(): array
+    {
+        return $this->allowedSenders;
+    }
+
+    /** @param list<string> $allowedSenders */
+    public function setAllowedSenders(array $allowedSenders): static
+    {
+        $this->allowedSenders = array_values(array_unique(array_filter(array_map(
+            static fn (string $s) => mb_strtolower(trim($s)),
+            $allowedSenders,
+        ))));
+
+        return $this;
+    }
+
+    public function allowsSender(string $email): bool
+    {
+        $email = mb_strtolower($email);
+        $domain = substr((string) strrchr($email, '@'), 1);
+
+        foreach ($this->allowedSenders as $pattern) {
+            if ($pattern === $email || ('' !== $domain && $pattern === '*@'.$domain)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function isEnabled(): bool

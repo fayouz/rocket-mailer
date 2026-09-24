@@ -8,12 +8,14 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Enum\EmailStatus;
 use App\Repository\EmailRepository;
+use App\Sender\AddressFormatter;
 use App\State\EmailSendProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Mime\Address;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -48,6 +50,16 @@ class Email
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?Application $application = null;
+
+    /** Resolved "From" (see SenderPolicy); null for emails sent before it existed. */
+    #[ORM\Column(length: 180, nullable: true)]
+    private ?string $fromAddress = null;
+
+    #[ORM\Column(length: 180, nullable: true)]
+    private ?string $fromName = null;
+
+    /** "From" as requested by the caller ("Name <email>" or "email"), validated by SenderPolicy. */
+    private ?string $requestedFrom = null;
 
     /** @var list<string> */
     #[ORM\Column(name: 'recipients_to')]
@@ -142,6 +154,38 @@ class Email
     public function setApplication(?Application $application): static
     {
         $this->application = $application;
+
+        return $this;
+    }
+
+    #[Groups(['email:list'])]
+    public function getFrom(): ?string
+    {
+        return null === $this->fromAddress ? null : AddressFormatter::format(new Address($this->fromAddress, $this->fromName ?? ''));
+    }
+
+    #[Groups(['email:write'])]
+    public function setFrom(?string $from): static
+    {
+        $this->requestedFrom = $from;
+
+        return $this;
+    }
+
+    public function getRequestedFrom(): ?string
+    {
+        return $this->requestedFrom;
+    }
+
+    public function getFromAddress(): ?Address
+    {
+        return null === $this->fromAddress ? null : new Address($this->fromAddress, $this->fromName ?? '');
+    }
+
+    public function applyFrom(Address $from): static
+    {
+        $this->fromAddress = $from->getAddress();
+        $this->fromName = '' !== $from->getName() ? $from->getName() : null;
 
         return $this;
     }

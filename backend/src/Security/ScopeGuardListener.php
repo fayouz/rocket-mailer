@@ -20,6 +20,7 @@ final class ScopeGuardListener
     private const EMBED_ALLOWED = [
         ['GET', '#^/api/me$#'],
         ['GET', '#^/api/embed/context$#'],
+        ['GET', '#^/api/senders$#'],
         ['GET', '#^/api/email_templates(/[^/]+)?$#'],
         ['POST', '#^/api/emails$#'],
         ['GET', '#^/api/emails/[^/]+$#'],

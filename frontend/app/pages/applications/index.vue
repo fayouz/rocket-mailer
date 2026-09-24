@@ -60,11 +60,11 @@ const columns: TableColumn<Application>[] = [
 // Create / edit
 const formOpen = ref(false)
 const editing = ref<Application | null>(null)
-const form = reactive({ name: '', description: '', canImpersonate: true, allowedOrigins: [] as string[] })
+const form = reactive({ name: '', description: '', canImpersonate: true, allowedOrigins: [] as string[], allowedSenders: [] as string[] })
 
 function create() {
   editing.value = null
-  Object.assign(form, { name: '', description: '', canImpersonate: true, allowedOrigins: [] })
+  Object.assign(form, { name: '', description: '', canImpersonate: true, allowedOrigins: [], allowedSenders: [] })
   formOpen.value = true
 }
 
@@ -75,6 +75,7 @@ function edit(application: Application) {
     description: application.description ?? '',
     canImpersonate: application.canImpersonate,
     allowedOrigins: [...application.allowedOrigins],
+    allowedSenders: [...(application.allowedSenders ?? [])],
   })
   formOpen.value = true
 }
@@ -186,6 +187,9 @@ ${endScript}`)
             <USwitch v-model="form.canImpersonate" label="Peut agir en tant qu'utilisateur (impersonation + embed)" />
             <UFormField label="Origines autorisées à embarquer le composeur" hint="ex. https://crm.exemple.com">
               <UInputTags v-model="form.allowedOrigins" add-on-blur add-on-paste class="w-full" />
+            </UFormField>
+            <UFormField label="Adresses d'expédition qu'elle peut imposer" hint="ex. *@crm.exemple.com ou agence@exemple.com">
+              <UInputTags v-model="form.allowedSenders" add-on-blur add-on-paste class="w-full" />
             </UFormField>
           </form>
         </template>

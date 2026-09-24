@@ -84,6 +84,11 @@ Sécurité du composeur embarqué :
 - **Transmission du jeton :** le jeton passe par `postMessage` ; l'iframe n'accepte que les messages venant de `window.parent` et d'une origine autorisée. Il reste en mémoire (pas de cookie, pas d'URL) et il est renouvelé automatiquement via `getToken` quand il expire.
 - **Jeton d'embed :** c'est un JWT à scope `embed`, envoyé avec `Authorization: Embed <jwt>`. Il ne peut que lister et lire les templates, envoyer un email et lire ses propres envois. Il est refusé comme session utilisateur (`Bearer`) et révoqué dès que l'application est désactivée.
 
+### Adresse d'expédition (« De »)
+- Le composeur a une liste **De**. Elle propose les adresses d'expédition des **Réglages** (l'adresse par défaut est présélectionnée) et l'adresse de l'utilisateur, sauf si les Réglages l'interdisent.
+- À l'installation, `MAILER_DEFAULT_FROM="Nom <adresse>"` crée l'adresse par défaut. On la gère ensuite dans les Réglages.
+- Une application peut imposer l'adresse à la volée, avec `setDraft({ from })` ou le champ `from` de l'API, dans la limite de ses **adresses d'expédition autorisées** (`contact@…` ou `*@domaine`). Toute autre adresse est refusée. Les réponses reviennent à l'utilisateur (`Reply-To`).
+
 ### Pièces jointes
 - Dans le composeur (application et widget), avec le bouton **Joindre des fichiers** ou par glisser-déposer : 10 fichiers, 10 Mo par fichier et 25 Mo par email par défaut. Les exécutables et scripts sont refusés.
 - Une application peut joindre un document qu'elle génère, par exemple un devis PDF. Son backend le téléverse au nom de l'utilisateur, puis la page le passe au widget avec `setDraft({ attachments: [id] })`.

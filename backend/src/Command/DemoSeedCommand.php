@@ -68,6 +68,7 @@ final class DemoSeedCommand
         $application->setDescription('Application tierce de démonstration (http://localhost:4000) qui embarque le composeur.')
             ->setCanImpersonate(true)
             ->setAllowedOrigins([$this->demoHostOrigin])
+            ->setAllowedSenders(['*@crm.example.org'])
             ->setEnabled(true);
         $application->useToken($this->demoAppToken);
         $this->em->persist($application);

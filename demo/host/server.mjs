@@ -65,7 +65,9 @@ function page(appId) {
     })
   }
   document.getElementById('user').addEventListener('change', mount)
-  document.getElementById('prefill').addEventListener('click', () => widget.setDraft({ to: ['client@example.com'], subject: 'Votre devis n°42' }))
+  // "From" imposed by the CRM: allowed because the application may use *@crm.example.org.
+  const FROM = 'Service commercial <commercial@crm.example.org>'
+  document.getElementById('prefill').addEventListener('click', () => widget.setDraft({ from: FROM, to: ['client@example.com'], subject: 'Votre devis n°42' }))
   // The CRM backend generates the PDF and uploads it as the current user; the composer receives its id.
   document.getElementById('quote').addEventListener('click', async () => {
     const user = document.getElementById('user').value
@@ -73,7 +75,7 @@ function page(appId) {
     if (!response.ok) return log('erreur : devis non joint (' + response.status + ')')
     const attachment = await response.json()
     log('devis joint : ' + attachment.filename)
-    widget.setDraft({ to: ['client@example.com'], subject: 'Votre devis n°42', attachments: [attachment.id] })
+    widget.setDraft({ from: FROM, to: ['client@example.com'], subject: 'Votre devis n°42', attachments: [attachment.id] })
   })
   mount()
 </script>

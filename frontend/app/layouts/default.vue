@@ -13,6 +13,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
     ? [
         { label: 'Utilisateurs', icon: 'i-lucide-users', to: '/users' },
         { label: 'Applications', icon: 'i-lucide-key-round', to: '/applications' },
+        { label: 'Réglages', icon: 'i-lucide-settings', to: '/settings' },
       ]
     : [],
 ])

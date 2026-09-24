@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Attachment, Email, EmailDraft, EmailTemplate } from '~/types/api'
+import type { Attachment, Email, EmailDraft, EmailTemplate, SenderOption } from '~/types/api'
 
 const props = defineProps<{ initial?: Partial<EmailDraft> }>()
 const emit = defineEmits<{ sent: [email: Email] }>()
@@ -8,7 +8,7 @@ const api = useApi()
 const toast = useToast()
 
 function emptyDraft(): EmailDraft {
-  return { to: [], cc: [], bcc: [], subject: '', htmlBody: '', template: null, attachments: [], ...props.initial }
+  return { from: null, to: [], cc: [], bcc: [], subject: '', htmlBody: '', template: null, attachments: [], ...props.initial }
 }
 
 const draft = reactive<EmailDraft>(emptyDraft())
@@ -20,6 +20,43 @@ const sending = ref(false)
 const attachments = ref<Attachment[]>([])
 const editor = useTemplateRef<{ getData: () => string | undefined }>('editor')
 const uploading = ref(false)
+
+// "From" choices: the settings' addresses, the user's own address, and any address imposed by the host application.
+const senders = ref<SenderOption[]>([])
+const sourceLabels: Record<SenderOption['source'], string> = {
+  settings: 'Adresse de l’organisation',
+  personal: 'Votre adresse',
+  application: 'Imposée par l’application',
+}
+const senderItems = computed(() => senders.value.map(option => ({
+  label: option.from,
+  value: option.from,
+  description: sourceLabels[option.source],
+})))
+
+function selectFrom(from: string | null | undefined) {
+  if (!from) {
+    draft.from = senders.value.find(option => option.default)?.from ?? null
+    return
+  }
+  if (!senders.value.some(option => option.from === from)) {
+    senders.value = [...senders.value, { from, email: from, name: null, default: false, source: 'application' }]
+  }
+  draft.from = from
+}
+
+async function loadSenders() {
+  try {
+    const imposed = senders.value.filter(option => option.source === 'application')
+    senders.value = [...await api<SenderOption[]>('/api/senders'), ...imposed]
+    selectFrom(draft.from)
+  }
+  catch (error) {
+    toast.add({ title: 'Adresses d’expédition indisponibles', description: apiErrorMessage(error), color: 'warning' })
+  }
+}
+
+onMounted(loadSenders)
 
 const canSend = computed(() => draft.to.length > 0 && draft.subject.trim() !== '' && draft.htmlBody.trim() !== '' && !sending.value && !uploading.value)
 
@@ -48,7 +85,8 @@ function applyTemplate(template: EmailTemplate) {
 }
 
 function applyDraft(incoming: Partial<EmailDraft>) {
-  const { attachments: attachmentIds, ...fields } = incoming
+  const { attachments: attachmentIds, from, ...fields } = incoming
+  if (from !== undefined) selectFrom(from)
   Object.assign(draft, {
     ...fields,
     to: fields.to?.filter(isEmail) ?? draft.to,
@@ -84,7 +122,9 @@ async function send() {
     })
     toast.add({ title: 'Message envoyé', description: email.subject, color: 'success', icon: 'i-lucide-check' })
     emit('sent', email)
+    const from = draft.from
     Object.assign(draft, emptyDraft())
+    draft.from = from
     attachments.value = []
     templateName.value = null
   }
@@ -101,6 +141,18 @@ defineExpose({ applyDraft })
 
 <template>
   <form class="flex flex-col gap-4" @submit.prevent="send">
+    <UFormField label="De" required>
+      <USelect
+        :model-value="draft.from ?? undefined"
+        :items="senderItems"
+        :loading="!senders.length"
+        placeholder="Adresse d’expédition"
+        class="w-full"
+        data-testid="from-select"
+        @update:model-value="(value: string) => (draft.from = value)"
+      />
+    </UFormField>
+
     <UFormField label="À" required>
       <div class="flex items-start gap-2">
         <UInputTags

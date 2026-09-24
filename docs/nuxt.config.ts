@@ -33,7 +33,7 @@ export default defineNuxtConfig({
         'lucide:arrow-right', 'lucide:book-open', 'lucide:laptop', 'simple-icons:github',
         'vscode-icons:file-type-html', 'vscode-icons:file-type-js', 'vscode-icons:file-type-nuxt',
         'vscode-icons:file-type-typescript', 'vscode-icons:file-type-vue', 'vscode-icons:file-type-php',
-        'vscode-icons:file-type-python', 'vscode-icons:file-type-reactts',
+        'vscode-icons:file-type-python', 'vscode-icons:file-type-reactts', 'vscode-icons:file-type-dotenv', 'lucide:at-sign',
       ],
     },
   },

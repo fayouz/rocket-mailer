@@ -36,6 +36,7 @@ export interface Application extends Tracked {
   plainToken?: string
   canImpersonate: boolean
   allowedOrigins: string[]
+  allowedSenders: string[]
   enabled: boolean
   lastUsedAt: string | null
 }
@@ -62,6 +63,27 @@ export interface TemplateVersion {
   changedFields: string[]
 }
 
+/** A "From" choice offered in the composer. */
+export interface SenderOption {
+  from: string
+  email: string
+  name: string | null
+  default: boolean
+  source: 'settings' | 'personal' | 'application'
+}
+
+export interface SenderAddress extends Tracked {
+  id: string
+  email: string
+  name: string | null
+  isDefault: boolean
+}
+
+export interface Settings {
+  personalFromAllowed: boolean
+  installDefaultFrom?: string
+}
+
 export interface Attachment {
   id: string
   filename: string
@@ -74,6 +96,7 @@ export type EmailStatus = 'queued' | 'sent' | 'failed'
 export interface Email extends Tracked {
   id: string
   sender: UserSummary
+  from: string | null
   applicationName: string | null
   to: string[]
   cc?: string[]
@@ -88,6 +111,8 @@ export interface Email extends Tracked {
 }
 
 export interface EmailDraft {
+  /** "Name <email>" or "email"; empty = default sender. */
+  from: string | null
   to: string[]
   cc: string[]
   bcc: string[]

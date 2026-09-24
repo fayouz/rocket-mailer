@@ -9,7 +9,8 @@ x-api-env: &api-env
   DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD:-app}@database:5432/app?serverVersion=16&charset=utf8
   MESSENGER_TRANSPORT_DSN: doctrine://default
   MAILER_DSN: ${MAILER_DSN:-smtp://mailpit:1025}
-  MAILER_SENDER: ${MAILER_SENDER:-}
+  # Default "From" at install; then managed in the app settings.
+  MAILER_DEFAULT_FROM: ${MAILER_DEFAULT_FROM:-Rocket Mailer <no-reply@example.org>}
   JWT_PASSPHRASE: ${JWT_PASSPHRASE:-change-me-in-production}
   CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$$}
   LDAP_ENABLED: ${LDAP_ENABLED:-0}

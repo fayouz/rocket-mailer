@@ -99,7 +99,12 @@ async function open(email: Email) {
             <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <dt class="text-muted">
                 De
-              </dt><dd>{{ selected.sender.displayName }} &lt;{{ selected.sender.email }}&gt;</dd>
+              </dt><dd>{{ selected.from ?? `${selected.sender.displayName} <${selected.sender.email}>` }}</dd>
+              <template v-if="selected.from && !selected.from.includes(selected.sender.email)">
+                <dt class="text-muted">
+                  Par
+                </dt><dd>{{ selected.sender.displayName }} &lt;{{ selected.sender.email }}&gt;</dd>
+              </template>
               <dt class="text-muted">
                 À
               </dt><dd>{{ selected.to.join(', ') }}</dd>
