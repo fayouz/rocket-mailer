@@ -1,0 +1,18 @@
+parameters:
+    env(LDAP_ENABLED): '0'
+    env(LDAP_URL): 'ldap://localhost:389'
+    env(LDAP_BASE_DN): ''
+    env(LDAP_SEARCH_DN): ''
+    env(LDAP_SEARCH_PASSWORD): ''
+    env(LDAP_USER_FILTER): '(objectClass=inetOrgPerson)'
+    env(LDAP_ADMIN_GROUP_DN): ''
+    env(MAILER_SENDER): ''
+    env(EMBED_TOKEN_TTL): '900'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
