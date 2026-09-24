@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { fr } from '@nuxt/ui/locale'
+
 const { data: navigation } = await useAsyncData('navigation', () => queryCollectionNavigation('docs'))
 const { data: files } = useLazyAsyncData('search', () => queryCollectionSearchSections('docs'), { server: false })
 
@@ -11,7 +13,7 @@ useHead({
 </script>
 
 <template>
-  <UApp>
+  <UApp :locale="fr">
     <NuxtLoadingIndicator color="var(--ui-primary)" />
     <AppHeader />
 

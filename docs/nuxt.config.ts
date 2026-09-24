@@ -1,3 +1,12 @@
+import { copyFileSync, mkdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+// The changelog lives at the repository root (CHANGELOG.md). Nuxt Content cannot watch the whole
+// repository, so the file is copied next to the site, for the "changelog" collection.
+const changelogDir = fileURLToPath(new URL('.changelog', import.meta.url))
+mkdirSync(changelogDir, { recursive: true })
+copyFileSync(fileURLToPath(new URL('../CHANGELOG.md', import.meta.url)), `${changelogDir}/CHANGELOG.md`)
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-01',
   modules: ['@nuxt/ui', '@nuxt/content', '@nuxt/eslint'],

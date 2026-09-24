@@ -6,7 +6,7 @@ Envoi d'emails en texte enrichi, templates d'email visuels, et composeur embarqu
 |---|---|
 | `backend/` | Symfony 8.1, API Platform 5, Doctrine ORM 3 (PostgreSQL), StofDoctrineExtensions, LexikJWT, Messenger, Mailer, LDAP |
 | `frontend/` | Nuxt 4, Nuxt UI 4, CKEditor 5 (composeur), GrapesJS + preset newsletter (templates) |
-| `docs/` | Site de documentation (Nuxt UI + Nuxt Content) : `cd docs && npm install && npm run dev`, puis http://localhost:3001 |
+| `docs/` | Site de documentation (Nuxt UI + Nuxt Content), avec le changelog sur `/changelog` : `cd docs && npm install && npm run dev`, puis http://localhost:3001 |
 
 ## Démarrage rapide
 
@@ -123,5 +123,5 @@ Le worker utilise l'image API avec `php bin/console messenger:consume async`.
 
 - `main` : production (images `latest` et tags `vX.Y.Z`)
 - `develop` : intégration (images `develop`)
-- `feature/*` : une fonctionnalité, en pull request vers `develop`
-- `release/*` et `hotfix/*` : préparation de version et correctifs vers `main`
+- `feature/*` : une fonctionnalité, en pull request vers `develop`. Chaque pull request complète la section `[Non publié]` de [CHANGELOG.md](CHANGELOG.md) (format [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/)), publiée sur la page `/changelog` de la documentation.
+- `release/*` et `hotfix/*` : préparation de version et correctifs vers `main`. À la release, `[Non publié]` devient `[X.Y.Z] - date`, puis on tague `vX.Y.Z`.

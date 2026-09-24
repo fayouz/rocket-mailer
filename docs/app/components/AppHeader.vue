@@ -16,6 +16,14 @@ const { site } = useAppConfig()
     <UContentSearchButton :collapsed="false" label="Rechercher…" class="w-full max-w-sm" />
 
     <template #right>
+      <UButton
+        to="/changelog"
+        label="Changelog"
+        icon="i-lucide-history"
+        color="neutral"
+        variant="ghost"
+        class="hidden sm:inline-flex"
+      />
       <UContentSearchButton class="lg:hidden" />
       <UColorModeButton />
       <UButton
@@ -30,6 +38,7 @@ const { site } = useAppConfig()
 
     <template #body>
       <UContentNavigation :navigation="navigation" highlight />
+      <UButton to="/changelog" label="Changelog" icon="i-lucide-history" color="neutral" variant="ghost" class="mt-4 sm:hidden" />
     </template>
   </UHeader>
 </template>
