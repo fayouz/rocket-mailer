@@ -90,6 +90,43 @@ jobs:
       - run: npm run typecheck
       - run: npm run generate
 
+  integration-nuxt:
+    name: Integration client (Nuxt layer)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/nuxt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: integrations/nuxt/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  integration-symfony:
+    name: Integration client (Symfony bundle, PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.4']
+    defaults:
+      run:
+        working-directory: integrations/symfony
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+      # A library: resolved against the latest versions allowed by composer.json.
+      - run: composer update --prefer-dist --no-progress --no-interaction
+      - run: vendor/bin/phpunit
+
   images:
     name: Docker image (${{ matrix.component }})
     needs: [backend, frontend]

@@ -25,7 +25,7 @@ Le premier démarrage prend quelques minutes (build des images). Le service `dem
 | Adresse | Contenu |
 |---|---|
 | http://localhost:3000 | Rocket Mailer |
-| http://localhost:4000 | « Démo CRM », une application tierce qui embarque le composeur |
+| http://localhost:4000 | « Démo CRM », une application tierce qui embarque le composeur (widget JavaScript, et web component sur `/web-component`) |
 | http://localhost:3001 | Documentation, et le changelog sur `/changelog` |
 | http://localhost:8025 | Mailpit : tous les emails envoyés arrivent ici, rien ne part vraiment |
 | http://localhost:8000/api/docs | Documentation de l'API |

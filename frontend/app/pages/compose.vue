@@ -1,5 +1,8 @@
 <script setup lang="ts">
 useHead({ title: 'Nouveau message · Rocket Mailer' })
+
+// Declaring and embedding applications is an admin matter.
+const auth = useAuth()
 </script>
 
 <template>
@@ -14,7 +17,7 @@ useHead({ title: 'Nouveau message · Rocket Mailer' })
 
     <template #body>
       <div class="mx-auto w-full max-w-4xl">
-        <EmailComposer @sent="navigateTo('/emails')" />
+        <EmailComposer :embeddable="auth.isAdmin.value" @sent="navigateTo('/emails')" />
       </div>
     </template>
   </UDashboardPanel>

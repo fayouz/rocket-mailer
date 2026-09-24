@@ -6,6 +6,7 @@ Envoi d'emails en texte enrichi, templates d'email visuels, et composeur embarqu
 |---|---|
 | `backend/` | Symfony 8.1, API Platform 5, Doctrine ORM 3 (PostgreSQL), StofDoctrineExtensions, LexikJWT, Messenger, Mailer, LDAP |
 | `frontend/` | Nuxt 4, Nuxt UI 4, CKEditor 5 (composeur), GrapesJS + preset newsletter (templates) |
+| `integrations/` | Clients pour les applications appelantes : layer Nuxt (`integrations/nuxt`) et bundle Symfony (`integrations/symfony`), publiés dans des dépôts miroirs par `.github/workflows/split.yml` |
 | `docs/` | Site de documentation (Nuxt UI + Nuxt Content), avec le changelog sur `/changelog` : `cd docs && npm install && npm run dev`, puis http://localhost:3001 |
 
 ## Démarrage rapide
@@ -82,6 +83,14 @@ Chaque email envoyé garde l'utilisateur **et** l'application d'origine. Désact
      })
    </script>
    ```
+
+Ou, avec le **web component** défini par le même script :
+
+```html
+<rocket-mailer-composer application-id="<uuid>" token-url="/mon-backend/rocket-mailer-token"></rocket-mailer-composer>
+```
+
+Pour une application Nuxt ou Symfony, utilisez plutôt les clients de `integrations/` : ils fournissent le composant, l'endpoint de jeton et l'envoi côté serveur. Le bouton **Intégrer** du composeur génère le code pour une application donnée.
 
 Sécurité du composeur embarqué :
 - **Origines autorisées :** la page `/embed/compose` n'est affichable que depuis les origines déclarées sur l'application (`Content-Security-Policy: frame-ancestors`). Toutes les autres pages envoient `frame-ancestors 'none'`.

@@ -50,6 +50,7 @@ const columns: TableColumn<Application>[] = [
   {
     id: 'actions',
     cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
+      h(UButton, { icon: 'i-lucide-code-xml', color: 'neutral', variant: 'ghost', 'aria-label': 'Code d’intégration', onClick: () => (embedFor.value = row.original.id) }),
       h(UButton, { icon: 'i-lucide-pencil', color: 'neutral', variant: 'ghost', 'aria-label': 'Modifier', onClick: () => edit(row.original) }),
       h(UButton, { icon: 'i-lucide-rotate-cw', color: 'neutral', variant: 'ghost', 'aria-label': 'Régénérer le jeton', onClick: () => (toRotate.value = row.original) }),
       h(UButton, { icon: 'i-lucide-trash-2', color: 'error', variant: 'ghost', 'aria-label': 'Supprimer', onClick: () => (toDelete.value = row.original) }),
@@ -58,6 +59,15 @@ const columns: TableColumn<Application>[] = [
 ]
 
 // Create / edit
+// "Code d'intégration" of one application (same dialog as "Intégrer" in the composer, without a draft).
+const embedFor = ref<string | null>(null)
+const embedOpen = computed({
+  get: () => embedFor.value !== null,
+  set: (value: boolean) => {
+    if (!value) embedFor.value = null
+  },
+})
+
 const formOpen = ref(false)
 const editing = ref<Application | null>(null)
 const form = reactive({ name: '', description: '', canImpersonate: true, allowedOrigins: [] as string[], allowedSenders: [] as string[] })
@@ -246,6 +256,7 @@ ${endScript}`)
           </div>
         </template>
       </UModal>
+      <EmbedCodeModal v-if="embedFor" v-model:open="embedOpen" :application-id="embedFor" />
     </template>
   </UDashboardPanel>
 </template>

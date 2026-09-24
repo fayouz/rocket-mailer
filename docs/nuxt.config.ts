@@ -43,6 +43,8 @@ export default defineNuxtConfig({
         'vscode-icons:file-type-html', 'vscode-icons:file-type-js', 'vscode-icons:file-type-nuxt',
         'vscode-icons:file-type-typescript', 'vscode-icons:file-type-vue', 'vscode-icons:file-type-php',
         'vscode-icons:file-type-python', 'vscode-icons:file-type-reactts', 'vscode-icons:file-type-dotenv', 'lucide:at-sign',
+        'lucide:plug', 'lucide:signpost', 'lucide:layers', 'simple-icons:nuxtdotjs', 'simple-icons:symfony',
+        'vscode-icons:file-type-yaml', 'vscode-icons:file-type-twig', 'vscode-icons:file-type-light-yaml',
       ],
     },
   },

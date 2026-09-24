@@ -1,0 +1,55 @@
+# Publishes the integration clients to their read-only mirror repositories (as Symfony does for its components):
+#   integrations/nuxt    -> fayouz/rocket-mailer-nuxt
+#   integrations/symfony -> fayouz/rocket-mailer-symfony
+# Setup: create both (empty) repositories, then add a SPLIT_TOKEN secret: a fine-grained token with
+# "Contents: read and write" on them. Without the secret, this workflow does nothing.
+name: Split integrations
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+    paths: ['integrations/**', '.github/workflows/split.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: split-${{ github.ref }}
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - prefix: integrations/nuxt
+            repository: fayouz/rocket-mailer-nuxt
+          - prefix: integrations/symfony
+            repository: fayouz/rocket-mailer-symfony
+    steps:
+      - name: Check the token
+        id: token
+        env:
+          SPLIT_TOKEN: ${{ secrets.SPLIT_TOKEN }}
+        run: |
+          if [ -z "$SPLIT_TOKEN" ]; then
+            echo "::notice::SPLIT_TOKEN is not set: ${{ matrix.repository }} is not updated."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.enabled == 'true'
+        with:
+          fetch-depth: 0
+      - name: Split and push
+        if: steps.token.outputs.enabled == 'true'
+        env:
+          SPLIT_TOKEN: ${{ secrets.SPLIT_TOKEN }}
+        run: |
+          git subtree split --prefix "${{ matrix.prefix }}" -b split
+          remote="https://x-access-token:${SPLIT_TOKEN}@github.com/${{ matrix.repository }}.git"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            git push "$remote" "split:refs/tags/${GITHUB_REF_NAME}"
+          else
+            git push --force "$remote" "split:refs/heads/${GITHUB_REF_NAME}"
+          fi

@@ -12,6 +12,12 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
   - l'application qui embarque le composeur passe les valeurs avec `setDraft({ template, variables })` : le composeur charge le template et fait le remplacement ;
   - par l'API, `POST /api/emails` accepte `template` et `variables` sans `subject` ni `htmlBody` ; une variable manquante donne une erreur `422`.
 - Démo CRM : bouton « Relancer le devis (template + variables) ».
+- **Web component** `<rocket-mailer-composer>`, défini par `embed.js` : une balise suffit (`application-id`, `token-url`) ; propriété `draft` (applicable avant que le composeur soit prêt), événements `ready`, `sent`, `error`. Démo CRM a une page « Web component ».
+- Bouton **Intégrer** dans le composeur (administrateurs) et **Code d'intégration** dans la page Applications : code prêt à coller pour une application (web component, JavaScript, Nuxt, endpoint de jeton), pré-rempli avec le brouillon en cours, template et variables compris.
+- **Clients d'intégration**, dans `integrations/`, publiés dans des dépôts miroirs :
+  - layer Nuxt `@rocket-mailer/nuxt` : composant `<RocketMailerComposer>`, endpoint de jeton Nitro, `sendRocketMailerEmail()` ;
+  - bundle Symfony `rocket-mailer/rocket-mailer-bundle` : endpoint de jeton, `RocketMailerClient` (envoi, templates, pièces jointes), fonction Twig `rocket_mailer_composer()`.
+- Documentation « Intégrer dans votre application » : un guide par cas (Nuxt, Nuxt + API Platform, Symfony, autre stack).
 
 - La démo (et Codespaces) lance aussi le site de documentation et le changelog, sur le port 3001.
 - Sur Rocket Mailer, `/docs` et `/changelog` redirigent vers la documentation et le changelog. Le tableau de bord a un raccourci « Nouveautés ».

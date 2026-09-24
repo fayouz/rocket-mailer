@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import type { Attachment, Email, EmailDraft, EmailTemplate, SenderOption, TemplateVariable } from '~/types/api'
 
-const props = defineProps<{ initial?: Partial<EmailDraft> }>()
+const props = defineProps<{
+  initial?: Partial<EmailDraft>
+  /** Shows "Intégrer": the code to embed this composer, with the current draft, in a calling application. */
+  embeddable?: boolean
+}>()
 const emit = defineEmits<{ sent: [email: Email] }>()
 
 const api = useApi()
@@ -204,6 +208,22 @@ async function send() {
   }
 }
 
+// "Intégrer": the current draft as the calling application would pass it. With a template, the template
+// provides the content and the subject; its variables become values to fill ("client.prenom": "Prénom du client").
+const embedOpen = ref(false)
+const embedDraft = computed<EmbedDraft>(() => ({
+  // The default sender is preselected anyway: only an explicit choice is worth passing.
+  from: draft.from !== senders.value.find(option => option.default)?.from ? draft.from : null,
+  to: draft.to,
+  cc: draft.cc,
+  bcc: draft.bcc,
+  subject: draft.template ? undefined : draft.subject,
+  template: draft.template,
+  variables: templateVariables.value.length
+    ? nestVariables(Object.fromEntries(templateVariables.value.map(v => [v.name, variableValues.value[v.name] ?? `… (${v.label || v.name})`])))
+    : undefined,
+}))
+
 defineExpose({ applyDraft })
 </script>
 
@@ -263,6 +283,16 @@ defineExpose({ applyDraft })
         @click="pickerOpen = true"
       />
       <UBadge v-if="templateName" :label="templateName" variant="subtle" color="neutral" />
+      <UButton
+        v-if="embeddable"
+        icon="i-lucide-code-xml"
+        label="Intégrer"
+        color="neutral"
+        variant="ghost"
+        class="ms-auto"
+        data-testid="embed-button"
+        @click="embedOpen = true"
+      />
     </div>
 
     <UAlert
@@ -299,6 +329,7 @@ defineExpose({ applyDraft })
     </div>
 
     <TemplatePicker v-model:open="pickerOpen" @pick="onTemplatePicked" />
+    <EmbedCodeModal v-if="embeddable" v-model:open="embedOpen" :draft="embedDraft" />
 
     <UModal
       :open="pendingTemplate !== null"

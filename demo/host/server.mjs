@@ -16,17 +16,19 @@ async function applicationId() {
   return (await response.json()).application.id
 }
 
+const nav = current => `<header><h1>Démo CRM — application tierce</h1>
+<nav>${[['/', 'Widget JavaScript'], ['/web-component', 'Web component']]
+    .map(([href, label]) => `<a href="${href}"${href === current ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav></header>`
+
 const escape = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[c])
 
-function page(appId) {
-  const options = USERS.map(u => `<option>${escape(u)}</option>`).join('')
-  return `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Démo CRM</title>
-<style>
+const STYLE = `<style>
   body { margin: 0; font-family: system-ui, sans-serif; background: #eef2ff; color: #1e1b4b; }
   header { background: #4338ca; color: white; padding: 14px 24px; display: flex; gap: 16px; align-items: center; }
   header h1 { font-size: 18px; margin: 0; flex: 1; }
+  header nav { display: flex; gap: 4px; }
+  header a { color: white; text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 14px; }
+  header a[aria-current] { background: #ffffff33; }
   main { display: grid; grid-template-columns: 280px 1fr; gap: 24px; padding: 24px; max-width: 1400px; margin: auto; }
   aside, section { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px #0001; }
   label { font-size: 13px; display: block; margin-bottom: 4px; }
@@ -34,9 +36,59 @@ function page(appId) {
   .client { border: 1px solid #c7d2fe; border-radius: 8px; padding: 10px; margin-top: 12px; font-size: 14px; }
   button { margin-top: 8px; width: 100%; padding: 8px; border: 0; border-radius: 6px; background: #4338ca; color: white; cursor: pointer; }
   #log { font-size: 12px; font-family: monospace; white-space: pre-wrap; margin-top: 16px; }
-</style></head>
+</style>`
+
+// Same integration with the <rocket-mailer-composer> web component: no JavaScript needed to mount it.
+function webComponentPage(appId) {
+  const options = USERS.map(u => `<option>${escape(u)}</option>`).join('')
+  return `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Démo CRM — web component</title>
+${STYLE}</head>
 <body>
-<header><h1>Démo CRM — application tierce</h1><span>Intégration Rocket Mailer</span></header>
+${nav('/web-component')}
+<main>
+  <aside>
+    <label for="user">Utilisateur connecté au CRM (impersonné)</label>
+    <select id="user">${options}</select>
+    <div class="client"><strong>Client : Société Exemple</strong><br>client@example.com<br>Devis n°42 en attente
+      <button id="prefill">Écrire à ce client</button></div>
+    <div id="log">Événements du composant :</div>
+  </aside>
+  <section>
+    <rocket-mailer-composer
+      id="composer"
+      base-url="${escape(MAILER_URL)}"
+      application-id="${escape(appId)}"
+      token-url="/token?user=${encodeURIComponent(USERS[0])}"
+      draft='${escape(JSON.stringify({ to: ['client@example.com'] }))}'
+    ></rocket-mailer-composer>
+  </section>
+</main>
+<script src="${escape(MAILER_URL)}/embed.js"></script>
+<script>
+  const log = (m) => { document.getElementById('log').textContent += '\\n' + new Date().toLocaleTimeString() + ' ' + m }
+  const composer = document.getElementById('composer')
+  composer.addEventListener('ready', () => log('ready'))
+  composer.addEventListener('sent', (e) => log('sent : « ' + e.detail.subject + ' » → ' + e.detail.to.join(', ')))
+  composer.addEventListener('error', (e) => log('error : ' + e.detail.message))
+  // Changing an attribute remounts the composer, here as another CRM user.
+  document.getElementById('user').addEventListener('change', (e) => composer.setAttribute('token-url', '/token?user=' + encodeURIComponent(e.target.value)))
+  document.getElementById('prefill').addEventListener('click', () => {
+    composer.draft = { from: 'Service commercial <commercial@crm.example.org>', to: ['client@example.com'], subject: 'Votre devis n°42' }
+  })
+</script>
+</body></html>`
+}
+
+function page(appId) {
+  const options = USERS.map(u => `<option>${escape(u)}</option>`).join('')
+  return `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Démo CRM</title>
+${STYLE}</head>
+<body>
+${nav('/')}
 <main>
   <aside>
     <label for="user">Utilisateur connecté au CRM (impersonné)</label>
@@ -171,9 +223,10 @@ http.createServer(async (req, res) => {
       res.end(await response.text())
       return
     }
-    if (url.pathname === '/') {
+    if (url.pathname === '/' || url.pathname === '/web-component') {
       appIdPromise ??= applicationId().catch((e) => { appIdPromise = undefined; throw e })
-      const html = page(await appIdPromise)
+      const appId = await appIdPromise
+      const html = url.pathname === '/' ? page(appId) : webComponentPage(appId)
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       res.end(html)
       return
