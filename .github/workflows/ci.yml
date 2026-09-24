@@ -186,9 +186,18 @@ jobs:
           # Sending goes through the async worker and reaches Mailpit
           ALICE=$(curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -r .token)
+          # ... with an attachment uploaded through the proxy, delivered by the worker (shared volume)
+          echo "demo attachment" > /tmp/ci-note.txt
+          ATTACHMENT=$(curl -fsS -X POST http://localhost:3000/api/attachments -H "Authorization: Bearer $ALICE" \
+            -H 'Accept: application/json' -F "file=@/tmp/ci-note.txt" | jq -r .id)
           curl -fsS -X POST http://localhost:3000/api/emails -H "Authorization: Bearer $ALICE" -H 'Content-Type: application/json' \
-            -H 'Accept: application/json' -d '{"to":["client@example.com"],"subject":"CI demo","htmlBody":"<p>ok</p>"}' | jq -e '.status == "queued"'
-          for i in $(seq 1 30); do curl -fsS http://localhost:8025/api/v1/messages | jq -e '.messages | map(.Subject) | index("CI demo")' && exit 0; sleep 2; done
+            -H 'Accept: application/json' \
+            -d "{\"to\":[\"client@example.com\"],\"subject\":\"CI demo\",\"htmlBody\":\"<p>ok</p>\",\"attachments\":[\"/api/attachments/$ATTACHMENT\"]}" \
+            | jq -e '.status == "queued"'
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8025/api/v1/messages | jq -e '.messages | map(select(.Subject == "CI demo" and .Attachments == 1)) | length == 1' && exit 0
+            sleep 2
+          done
           exit 1
       - name: Logs
         if: failure()

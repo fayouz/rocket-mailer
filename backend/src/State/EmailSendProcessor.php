@@ -11,6 +11,7 @@ use App\Security\Roles;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
@@ -26,6 +27,7 @@ final class EmailSendProcessor implements ProcessorInterface
         private readonly ActorContext $actor,
         private readonly Security $security,
         private readonly MessageBusInterface $bus,
+        #[Autowire(env: 'int:ATTACHMENTS_MAX_TOTAL_SIZE')] private readonly int $maxTotalAttachmentSize,
     ) {
     }
 
@@ -36,6 +38,23 @@ final class EmailSendProcessor implements ProcessorInterface
         $template = $data->getTemplate();
         if (null !== $template && !$template->isShared() && $template->getOwner() !== $user && !$this->security->isGranted(Roles::ADMIN)) {
             throw new AccessDeniedHttpException('You cannot use this template.');
+        }
+
+        $totalSize = 0;
+        foreach ($data->getAttachments() as $attachment) {
+            if ($attachment->getOwner() !== $user) {
+                throw new AccessDeniedHttpException('You can only attach files you uploaded.');
+            }
+            if (null !== $attachment->getEmail()) {
+                throw new UnprocessableEntityHttpException(\sprintf('"%s" has already been sent with another email.', $attachment->getFilename()));
+            }
+            $totalSize += $attachment->getSize();
+        }
+        if ($totalSize > $this->maxTotalAttachmentSize) {
+            throw new UnprocessableEntityHttpException(\sprintf('Attachments exceed %d MB in total.', intdiv($this->maxTotalAttachmentSize, 1024 * 1024)));
+        }
+        foreach ($data->getAttachments() as $attachment) {
+            $attachment->attachTo($data);
         }
 
         $data->setSender($user);

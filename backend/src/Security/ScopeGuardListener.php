@@ -23,6 +23,9 @@ final class ScopeGuardListener
         ['GET', '#^/api/email_templates(/[^/]+)?$#'],
         ['POST', '#^/api/emails$#'],
         ['GET', '#^/api/emails/[^/]+$#'],
+        ['POST', '#^/api/attachments$#'],
+        ['GET', '#^/api/attachments/[^/]+$#'],
+        ['DELETE', '#^/api/attachments/[^/]+$#'],
     ];
 
     private const APPLICATION_ALLOWED = [

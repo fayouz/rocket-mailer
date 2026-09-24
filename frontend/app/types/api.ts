@@ -62,6 +62,13 @@ export interface TemplateVersion {
   changedFields: string[]
 }
 
+export interface Attachment {
+  id: string
+  filename: string
+  mimeType: string
+  size: number
+}
+
 export type EmailStatus = 'queued' | 'sent' | 'failed'
 
 export interface Email extends Tracked {
@@ -76,6 +83,8 @@ export interface Email extends Tracked {
   status: EmailStatus
   errorMessage?: string | null
   sentAt: string | null
+  attachmentCount: number
+  attachments?: Attachment[]
 }
 
 export interface EmailDraft {
@@ -85,4 +94,6 @@ export interface EmailDraft {
   subject: string
   htmlBody: string
   template: string | null
+  /** Ids of attachments already uploaded for this user (e.g. by the host application's backend). */
+  attachments: string[]
 }

@@ -9,6 +9,8 @@ use ApiPlatform\Metadata\Post;
 use App\Enum\EmailStatus;
 use App\Repository\EmailRepository;
 use App\State\EmailSendProcessor;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -31,6 +33,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 class Email
 {
     public const MAX_RECIPIENTS = 50;
+    public const MAX_ATTACHMENTS = 10;
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
@@ -83,6 +86,17 @@ class Email
     #[Groups(['email:read', 'email:write'])]
     private ?EmailTemplate $template = null;
 
+    /**
+     * Uploaded with POST /api/attachments, referenced here by IRI.
+     * The owning side (Attachment::$email) is set by EmailSendProcessor once ownership is checked.
+     *
+     * @var Collection<int, Attachment>
+     */
+    #[ORM\OneToMany(targetEntity: Attachment::class, mappedBy: 'email')]
+    #[Assert\Count(max: self::MAX_ATTACHMENTS)]
+    #[Groups(['email:read', 'email:write'])]
+    private Collection $attachments;
+
     #[ORM\Column(length: 16, enumType: EmailStatus::class)]
     #[Groups(['email:list'])]
     private EmailStatus $status = EmailStatus::Queued;
@@ -100,6 +114,7 @@ class Email
     public function __construct()
     {
         $this->id = Uuid::v7();
+        $this->attachments = new ArrayCollection();
     }
 
     public function getId(): Uuid
@@ -213,6 +228,34 @@ class Email
         $this->template = $template;
 
         return $this;
+    }
+
+    /** @return Collection<int, Attachment> */
+    public function getAttachments(): Collection
+    {
+        return $this->attachments;
+    }
+
+    public function addAttachment(Attachment $attachment): static
+    {
+        if (!$this->attachments->contains($attachment)) {
+            $this->attachments->add($attachment);
+        }
+
+        return $this;
+    }
+
+    public function removeAttachment(Attachment $attachment): static
+    {
+        $this->attachments->removeElement($attachment);
+
+        return $this;
+    }
+
+    #[Groups(['email:list'])]
+    public function getAttachmentCount(): int
+    {
+        return $this->attachments->count();
     }
 
     public function getStatus(): EmailStatus

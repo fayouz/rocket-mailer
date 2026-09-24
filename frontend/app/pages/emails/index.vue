@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { Email, EmailStatus } from '~/types/api'
+import type { Attachment, Email, EmailStatus } from '~/types/api'
 
 useHead({ title: 'Envoyés · Rocket Mailer' })
 
 const api = useApi()
 const toast = useToast()
 const UBadge = resolveComponent('UBadge')
+const UIcon = resolveComponent('UIcon')
 
 const { data: emails, status, refresh } = await useAsyncData('emails', () => api<Email[]>('/api/emails', { query: { itemsPerPage: 100 } }), { default: () => [] })
 
@@ -19,7 +20,16 @@ const statusBadge: Record<EmailStatus, { label: string, color: 'neutral' | 'succ
 const columns: TableColumn<Email>[] = [
   { accessorKey: 'createdAt', header: 'Date', cell: ({ row }) => formatDate(row.original.createdAt) },
   { accessorKey: 'to', header: 'Destinataires', cell: ({ row }) => row.original.to.join(', ') },
-  { accessorKey: 'subject', header: 'Objet' },
+  {
+    accessorKey: 'subject',
+    header: 'Objet',
+    cell: ({ row }) => h('span', { class: 'inline-flex items-center gap-1.5' }, [
+      row.original.subject,
+      row.original.attachmentCount
+        ? h(UIcon, { 'name': 'i-lucide-paperclip', 'class': 'size-4 text-muted', 'aria-label': `${row.original.attachmentCount} pièce(s) jointe(s)` })
+        : null,
+    ]),
+  },
   { accessorKey: 'applicationName', header: 'Via', cell: ({ row }) => row.original.applicationName ?? 'Rocket Mailer' },
   {
     accessorKey: 'status',
@@ -35,6 +45,19 @@ const detailOpen = computed({
     if (!value) selected.value = null
   },
 })
+
+async function download(attachment: Attachment) {
+  try {
+    const blob = await api<Blob>(`/api/attachments/${attachment.id}/download`, { responseType: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const link = Object.assign(document.createElement('a'), { href: url, download: attachment.filename })
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+  catch (error) {
+    toast.add({ title: 'Téléchargement impossible', description: apiErrorMessage(error), color: 'error' })
+  }
+}
 
 async function open(email: Email) {
   try {
@@ -97,6 +120,18 @@ async function open(email: Email) {
                 Via
               </dt><dd>{{ selected.applicationName ?? 'Rocket Mailer' }}</dd>
             </dl>
+            <div v-if="selected.attachments?.length" class="flex flex-wrap gap-2">
+              <UButton
+                v-for="attachment in selected.attachments"
+                :key="attachment.id"
+                icon="i-lucide-paperclip"
+                :label="`${attachment.filename} (${formatSize(attachment.size)})`"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                @click="download(attachment)"
+              />
+            </div>
             <UAlert v-if="selected.errorMessage" color="error" variant="subtle" :description="selected.errorMessage" />
             <!-- Email HTML is untrusted: render it in a sandbox without scripts or same-origin access. -->
             <iframe

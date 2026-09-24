@@ -2,6 +2,7 @@
 
 namespace App\MessageHandler;
 
+use App\Attachment\AttachmentStorage;
 use App\Enum\EmailStatus;
 use App\Message\SendEmailMessage;
 use App\Repository\EmailRepository;
@@ -20,6 +21,7 @@ final class SendEmailHandler
         private readonly EmailRepository $emails,
         private readonly MailerInterface $mailer,
         private readonly EntityManagerInterface $em,
+        private readonly AttachmentStorage $storage,
         /** When set, emails are sent from this address (with the user's name) and replies go to the user. */
         #[Autowire(env: 'MAILER_SENDER')]
         private readonly string $enforcedSender,
@@ -42,6 +44,17 @@ final class SendEmailHandler
             ->to(...$email->getTo())
             ->cc(...$email->getCc())
             ->bcc(...$email->getBcc());
+
+        foreach ($email->getAttachments() as $attachment) {
+            $path = $this->storage->path($attachment);
+            if (!is_file($path)) {
+                $email->markFailed(\sprintf('Attachment "%s" is missing from the storage (ATTACHMENTS_DIR must be shared by the API and the worker).', $attachment->getFilename()));
+                $this->em->flush();
+
+                return;
+            }
+            $mime->attachFromPath($path, $attachment->getFilename(), $attachment->getMimeType());
+        }
 
         if ('' !== $this->enforcedSender) {
             $mime->from(new Address($this->enforcedSender, $sender->getDisplayName()))->replyTo($userAddress);

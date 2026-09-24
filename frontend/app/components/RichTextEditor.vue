@@ -41,6 +41,10 @@ import 'ckeditor5/ckeditor5.css'
 const model = defineModel<string>({ required: true })
 defineProps<{ disabled?: boolean }>()
 
+// v-model is updated with a 300 ms debounce: read the editor itself when the value must be exact (e.g. on send).
+const editor = shallowRef<ClassicEditor>()
+defineExpose({ getData: (): string | undefined => editor.value?.getData() })
+
 const config: EditorConfig = {
   licenseKey: 'GPL',
   plugins: [
@@ -77,7 +81,7 @@ const config: EditorConfig = {
 
 <template>
   <div class="rich-text-editor">
-    <Ckeditor v-model="model" :editor="ClassicEditor" :config="config" :disabled="disabled" />
+    <Ckeditor v-model="model" :editor="ClassicEditor" :config="config" :disabled="disabled" @ready="(instance: ClassicEditor) => (editor = instance)" />
   </div>
 </template>
 

@@ -42,6 +42,8 @@ services:
       RUN_MIGRATIONS: "1"
     volumes:
       - jwt_keys:/app/config/jwt
+      # Uploaded attachments: written by the API, read by the worker when sending.
+      - attachments:/app/var/attachments
     ports:
       - "8000:80"
     depends_on:
@@ -55,6 +57,7 @@ services:
     restart: unless-stopped
     volumes:
       - jwt_keys:/app/config/jwt
+      - attachments:/app/var/attachments
     depends_on:
       - api
 
@@ -88,3 +91,4 @@ services:
 volumes:
   database_data:
   jwt_keys:
+  attachments:
