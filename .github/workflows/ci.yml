@@ -208,6 +208,8 @@ jobs:
       - name: Check demo scenarios
         run: |
           set -x
+          # Seeded accounts: the first-run setup is closed
+          curl -fsS http://localhost:3000/api/setup | jq -e '.required == false'
           # Local account (through the front's same-origin /api proxy, as in Codespaces)
           curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -e .token

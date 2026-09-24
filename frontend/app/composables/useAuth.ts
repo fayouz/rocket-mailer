@@ -39,6 +39,12 @@ export function useAuth() {
     await fetchMe()
   }
 
+  /** Opens a session with a token obtained elsewhere (e.g. the first-run setup). */
+  async function startSession(value: string) {
+    setToken(value)
+    await fetchMe()
+  }
+
   async function fetchMe() {
     me.value = await useApi()<Me>('/api/me')
     return me.value
@@ -50,5 +56,5 @@ export function useAuth() {
     await navigateTo('/login')
   }
 
-  return { token: readonly(token), embedToken, me, isAuthenticated, isAdmin, authorizationHeader, login, fetchMe, logout }
+  return { token: readonly(token), embedToken, me, isAuthenticated, isAdmin, authorizationHeader, login, startSession, fetchMe, logout }
 }

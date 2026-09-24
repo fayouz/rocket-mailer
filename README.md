@@ -13,8 +13,9 @@ Envoi d'emails en texte enrichi, templates d'email visuels, et composeur embarqu
 
 ```bash
 docker compose up -d --build
-docker compose exec api php bin/console app:user:create admin@example.org 'un-mot-de-passe-long' --admin
 ```
+
+Au premier lancement, http://localhost:3000 affiche la **configuration initiale** : on y crée le compte administrateur (email et mot de passe). Si l'instance est exposée avant d'être configurée, définissez `SETUP_TOKEN` : la page le demandera. L'administrateur peut aussi être créé en ligne de commande : `docker compose exec api php bin/console app:user:create admin@example.org 'un-mot-de-passe-long' --admin`.
 
 - Application : http://localhost:3000
 - API + documentation OpenAPI : http://localhost:8000/api/docs

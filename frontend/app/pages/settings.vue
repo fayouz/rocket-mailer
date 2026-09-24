@@ -7,6 +7,8 @@ useHead({ title: 'Réglages · Rocket Mailer' })
 
 const api = useApi()
 const toast = useToast()
+// Right after the first-run setup.
+const welcome = ref(useRoute().query.welcome !== undefined)
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 
@@ -88,6 +90,25 @@ async function add() {
 
     <template #body>
       <div class="mx-auto flex w-full max-w-4xl flex-col gap-6">
+        <UAlert
+          v-if="welcome"
+          color="success"
+          variant="subtle"
+          icon="i-lucide-party-popper"
+          title="Rocket Mailer est prêt"
+          :close="true"
+          data-testid="welcome"
+          @update:open="welcome = false"
+        >
+          <template #description>
+            <p>Votre compte administrateur est créé. Prochaines étapes :</p>
+            <ol class="mt-1 list-decimal ps-5">
+              <li>vérifier ci-dessous l’adresse d’expédition par défaut (issue de <code>MAILER_DEFAULT_FROM</code>) ;</li>
+              <li>créer les <ULink to="/users" class="underline">utilisateurs</ULink>, ou les synchroniser depuis l’annuaire LDAP ;</li>
+              <li>déclarer les <ULink to="/applications" class="underline">applications</ULink> qui embarqueront le composeur.</li>
+            </ol>
+          </template>
+        </UAlert>
         <UPageCard
           title="Adresses d'expédition"
           description="Proposées dans la liste « De » du composeur. L'adresse par défaut est présélectionnée ; les réponses arrivent toujours à l'utilisateur (Reply-To)."

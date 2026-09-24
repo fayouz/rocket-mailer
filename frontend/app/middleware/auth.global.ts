@@ -6,6 +6,17 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   const auth = useAuth()
 
+  // First run: until an administrator exists, every page leads to the setup.
+  if (!auth.token.value) {
+    const setup = await useSetupStatus()
+    if (setup.required && to.path !== '/setup') return navigateTo('/setup')
+    if (!setup.required && to.path === '/setup') return navigateTo('/login')
+    if (to.path === '/setup') return
+  }
+  else if (to.path === '/setup') {
+    return navigateTo('/')
+  }
+
   if (to.path === '/login') {
     return auth.token.value ? navigateTo('/') : undefined
   }

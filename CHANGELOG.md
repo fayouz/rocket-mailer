@@ -6,6 +6,8 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Configuration initiale** : au premier lancement, tant qu'aucun compte n'existe, toutes les pages mènent à un formulaire de création du compte administrateur (email, nom, mot de passe). Il connecte ensuite l'administrateur et le guide vers les Réglages. `SETUP_TOKEN` (optionnel) protège cette étape sur une instance exposée. API : `GET` et `POST /api/setup`.
+
 - **Variables de template** : `{{ client.prenom }}`, `{{ devis.numero }}`…
   - dans l'éditeur, le bouton **{x}** de la barre de texte insère une variable ; le bouton **Variables** leur donne un libellé et une valeur par défaut ;
   - dans le composeur, un encadré **Variables à compléter** liste celles qui restent, et l'envoi est bloqué tant qu'il en reste ;

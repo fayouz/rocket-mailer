@@ -12,6 +12,8 @@ x-api-env: &api-env
   # Default "From" at install; then managed in the app settings.
   MAILER_DEFAULT_FROM: ${MAILER_DEFAULT_FROM:-Rocket Mailer <no-reply@example.org>}
   JWT_PASSPHRASE: ${JWT_PASSPHRASE:-change-me-in-production}
+  # First-run setup (creation of the administrator): optional secret asked by the setup page.
+  SETUP_TOKEN: ${SETUP_TOKEN:-}
   CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$$}
   LDAP_ENABLED: ${LDAP_ENABLED:-0}
   LDAP_URL: ${LDAP_URL:-ldap://ldap:389}
