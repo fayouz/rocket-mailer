@@ -41,6 +41,8 @@ jobs:
         if: steps.token.outputs.enabled == 'true'
         with:
           fetch-depth: 0
+          # Otherwise the default GITHUB_TOKEN, stored as an extra header, is sent instead of SPLIT_TOKEN.
+          persist-credentials: false
       - name: Split and push
         if: steps.token.outputs.enabled == 'true'
         env:
