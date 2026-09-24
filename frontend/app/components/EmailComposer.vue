@@ -1,0 +1,150 @@
+<script setup lang="ts">
+import type { Email, EmailDraft, EmailTemplate } from '~/types/api'
+
+const props = defineProps<{ initial?: Partial<EmailDraft> }>()
+const emit = defineEmits<{ sent: [email: Email] }>()
+
+const api = useApi()
+const toast = useToast()
+
+function emptyDraft(): EmailDraft {
+  return { to: [], cc: [], bcc: [], subject: '', htmlBody: '', template: null, ...props.initial }
+}
+
+const draft = reactive<EmailDraft>(emptyDraft())
+const showCopies = ref(draft.cc.length > 0 || draft.bcc.length > 0)
+const pickerOpen = ref(false)
+const templateName = ref<string | null>(null)
+const pendingTemplate = ref<EmailTemplate | null>(null)
+const sending = ref(false)
+
+const canSend = computed(() => draft.to.length > 0 && draft.subject.trim() !== '' && draft.htmlBody.trim() !== '' && !sending.value)
+
+function keepValidAddresses(field: 'to' | 'cc' | 'bcc') {
+  const invalid = draft[field].filter(address => !isEmail(address))
+  if (invalid.length) {
+    draft[field] = draft[field].filter(isEmail)
+    toast.add({ title: 'Adresse invalide', description: invalid.join(', '), color: 'warning' })
+  }
+}
+
+function onTemplatePicked(template: EmailTemplate) {
+  if (draft.htmlBody.trim() !== '') {
+    pendingTemplate.value = template
+    return
+  }
+  applyTemplate(template)
+}
+
+function applyTemplate(template: EmailTemplate) {
+  draft.htmlBody = template.html
+  draft.template = `/api/email_templates/${template.id}`
+  templateName.value = template.name
+  if (!draft.subject.trim() && template.defaultSubject) draft.subject = template.defaultSubject
+  pendingTemplate.value = null
+}
+
+function applyDraft(incoming: Partial<EmailDraft>) {
+  Object.assign(draft, {
+    ...incoming,
+    to: incoming.to?.filter(isEmail) ?? draft.to,
+    cc: incoming.cc?.filter(isEmail) ?? draft.cc,
+    bcc: incoming.bcc?.filter(isEmail) ?? draft.bcc,
+  })
+  if (draft.cc.length || draft.bcc.length) showCopies.value = true
+}
+
+async function send() {
+  sending.value = true
+  try {
+    const email = await api<Email>('/api/emails', { method: 'POST', body: { ...draft } })
+    toast.add({ title: 'Message envoyé', description: email.subject, color: 'success', icon: 'i-lucide-check' })
+    emit('sent', email)
+    Object.assign(draft, emptyDraft())
+    templateName.value = null
+  }
+  catch (error) {
+    toast.add({ title: 'Envoi impossible', description: apiErrorMessage(error), color: 'error' })
+  }
+  finally {
+    sending.value = false
+  }
+}
+
+defineExpose({ applyDraft })
+</script>
+
+<template>
+  <form class="flex flex-col gap-4" @submit.prevent="send">
+    <UFormField label="À" required>
+      <div class="flex items-start gap-2">
+        <UInputTags
+          v-model="draft.to"
+          placeholder="destinataire@exemple.com"
+          add-on-blur
+          add-on-paste
+          class="flex-1"
+          @update:model-value="keepValidAddresses('to')"
+        />
+        <UButton
+          v-if="!showCopies"
+          label="Cc / Cci"
+          color="neutral"
+          variant="ghost"
+          @click="showCopies = true"
+        />
+      </div>
+    </UFormField>
+
+    <template v-if="showCopies">
+      <UFormField label="Cc">
+        <UInputTags v-model="draft.cc" add-on-blur add-on-paste class="w-full" @update:model-value="keepValidAddresses('cc')" />
+      </UFormField>
+      <UFormField label="Cci">
+        <UInputTags v-model="draft.bcc" add-on-blur add-on-paste class="w-full" @update:model-value="keepValidAddresses('bcc')" />
+      </UFormField>
+    </template>
+
+    <UFormField label="Objet" required>
+      <UInput v-model="draft.subject" maxlength="255" class="w-full" />
+    </UFormField>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <UButton
+        icon="i-lucide-layout-template"
+        label="Importer un template"
+        color="neutral"
+        variant="outline"
+        @click="pickerOpen = true"
+      />
+      <UBadge v-if="templateName" :label="templateName" variant="subtle" color="neutral" />
+    </div>
+
+    <ClientOnly>
+      <RichTextEditor v-model="draft.htmlBody" :disabled="sending" />
+      <template #fallback>
+        <div class="h-[420px] animate-pulse rounded-md bg-elevated" />
+      </template>
+    </ClientOnly>
+
+    <div class="flex justify-end">
+      <UButton type="submit" icon="i-lucide-send" label="Envoyer" :loading="sending" :disabled="!canSend" />
+    </div>
+
+    <TemplatePicker v-model:open="pickerOpen" @pick="onTemplatePicked" />
+
+    <UModal
+      :open="pendingTemplate !== null"
+      title="Remplacer le contenu ?"
+      description="Le message en cours sera remplacé par le contenu du template."
+      @update:open="(value: boolean) => { if (!value) pendingTemplate = null }"
+    >
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton label="Annuler" color="neutral" variant="ghost" @click="pendingTemplate = null" />
+          <UButton label="Remplacer" color="warning" @click="applyTemplate(pendingTemplate!)" />
+        </div>
+      </template>
+    </UModal>
+  </form>
+</template>

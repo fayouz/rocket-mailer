@@ -17,6 +17,8 @@ final class ApplicationTest extends WebTestCase
         $created = $this->api('POST', '/api/applications', ['name' => 'CRM', 'canImpersonate' => true, 'allowedOrigins' => ['https://crm.example']], $jwt);
         $this->assertStatus(201);
         self::assertStringStartsWith('rma_', $created['plainToken']);
+        self::assertTrue($created['canImpersonate']);
+        self::assertSame(['https://crm.example'], $created['allowedOrigins']);
 
         $fetched = $this->api('GET', '/api/applications/'.$created['id'], authorization: $jwt);
         $this->assertStatus(200);

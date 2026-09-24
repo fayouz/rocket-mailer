@@ -1,0 +1,90 @@
+# Local stack: `docker compose up -d --build` then open http://localhost:3000
+# Test LDAP directory: `LDAP_ENABLED=1 LDAP_ADMIN_GROUP_DN=cn=mailer-admins,ou=groups,dc=example,dc=org docker compose --profile ldap up -d`
+# then sync from the Users page or `docker compose exec api php bin/console app:ldap:sync` (see docker/ldap/50-people.ldif).
+name: rocket-mailer
+
+x-api-env: &api-env
+  APP_ENV: prod
+  APP_SECRET: ${APP_SECRET:-change-me-in-production}
+  DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD:-app}@database:5432/app?serverVersion=16&charset=utf8
+  MESSENGER_TRANSPORT_DSN: doctrine://default
+  MAILER_DSN: ${MAILER_DSN:-smtp://mailpit:1025}
+  MAILER_SENDER: ${MAILER_SENDER:-}
+  JWT_PASSPHRASE: ${JWT_PASSPHRASE:-change-me-in-production}
+  CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$$}
+  LDAP_ENABLED: ${LDAP_ENABLED:-0}
+  LDAP_URL: ${LDAP_URL:-ldap://ldap:389}
+  LDAP_BASE_DN: ${LDAP_BASE_DN:-ou=people,dc=example,dc=org}
+  LDAP_SEARCH_DN: ${LDAP_SEARCH_DN:-cn=admin,dc=example,dc=org}
+  LDAP_SEARCH_PASSWORD: ${LDAP_SEARCH_PASSWORD:-adminpassword}
+  LDAP_USER_FILTER: ${LDAP_USER_FILTER:-(objectClass=inetOrgPerson)}
+  LDAP_ADMIN_GROUP_DN: ${LDAP_ADMIN_GROUP_DN:-}
+
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-d", "app", "-U", "app"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - database_data:/var/lib/postgresql/data
+
+  api:
+    build: ./backend
+    image: ${API_IMAGE:-rocket-mailer-api}
+    environment:
+      <<: *api-env
+      RUN_MIGRATIONS: "1"
+    volumes:
+      - jwt_keys:/app/config/jwt
+    ports:
+      - "8000:80"
+    depends_on:
+      database:
+        condition: service_healthy
+
+  worker:
+    image: ${API_IMAGE:-rocket-mailer-api}
+    environment: *api-env
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "-vv"]
+    restart: unless-stopped
+    volumes:
+      - jwt_keys:/app/config/jwt
+    depends_on:
+      - api
+
+  front:
+    build: ./frontend
+    image: ${FRONT_IMAGE:-rocket-mailer-front}
+    environment:
+      NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://localhost:8000}
+      NUXT_API_INTERNAL_BASE: http://api:80
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+
+  ldap:
+    profiles: ["ldap"]
+    image: osixia/openldap:1.5.0
+    command: ["--copy-service"]
+    environment:
+      LDAP_ORGANISATION: Example
+      LDAP_DOMAIN: example.org
+      LDAP_ADMIN_PASSWORD: adminpassword
+    volumes:
+      - ./docker/ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
+
+volumes:
+  database_data:
+  jwt_keys:

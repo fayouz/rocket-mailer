@@ -147,6 +147,12 @@ class Application
         return $this->canImpersonate;
     }
 
+    /** Accessor used by the serializer (it does not map a bare "canImpersonate()" to the property). */
+    public function getCanImpersonate(): bool
+    {
+        return $this->canImpersonate;
+    }
+
     public function setCanImpersonate(bool $canImpersonate): static
     {
         $this->canImpersonate = $canImpersonate;
