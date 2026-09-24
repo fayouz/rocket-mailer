@@ -1,0 +1,159 @@
+<?php
+
+namespace App\Tests\Functional;
+
+use App\Tests\ApiTestTrait;
+use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+
+/** MAILER_DEFAULT_FROM="Rocket Test <no-reply@example.test>" in .env.test */
+final class SenderTest extends WebTestCase
+{
+    use ApiTestTrait;
+
+    private function send(string $authorization, ?string $from = null, array $headers = []): ?array
+    {
+        return $this->api('POST', '/api/emails', array_filter([
+            'to' => ['client@example.com'],
+            'subject' => 'Hello',
+            'htmlBody' => '<p>Hi</p>',
+            'from' => $from,
+        ], static fn ($v) => null !== $v), $authorization, $headers);
+    }
+
+    public function testDefaultComesFromInstallConfigurationAndRepliesGoToTheUser(): void
+    {
+        $alice = $this->createUser('alice@example.org');
+        $alice->setFirstName('Alice')->setLastName('Durand');
+        $this->em()->flush();
+        $jwt = 'Bearer '.$this->jwtFor($alice);
+
+        $options = $this->api('GET', '/api/senders', authorization: $jwt);
+        $this->assertStatus(200);
+        self::assertSame(['Rocket Test <no-reply@example.test>', 'Alice Durand <alice@example.org>'], array_column($options, 'from'));
+        self::assertSame([true, false], array_column($options, 'default'));
+        self::assertSame(['settings', 'personal'], array_column($options, 'source'));
+
+        $email = $this->send($jwt);
+        $this->assertStatus(202);
+        self::assertSame('Rocket Test <no-reply@example.test>', $email['from']);
+        $message = self::getMailerMessage();
+        self::assertEmailAddressContains($message, 'From', 'no-reply@example.test');
+        self::assertEmailAddressContains($message, 'Reply-To', 'alice@example.org');
+    }
+
+    public function testUserCanSendFromTheirOwnAddressUnlessDisabled(): void
+    {
+        $jwt = 'Bearer '.$this->jwtFor($this->createUser('alice@example.org'));
+        $admin = 'Bearer '.$this->jwtFor($this->createUser('admin@example.org', ['ROLE_ADMIN']));
+
+        $this->send($jwt, 'alice@example.org');
+        $this->assertStatus(202);
+        $message = self::getMailerMessage();
+        self::assertEmailAddressContains($message, 'From', 'alice@example.org');
+        self::assertFalse($message->getHeaders()->has('Reply-To'));
+
+        $this->api('PATCH', '/api/settings', ['personalFromAllowed' => false], $admin);
+        $this->assertStatus(200);
+
+        self::assertSame(['settings'], array_column($this->api('GET', '/api/senders', authorization: $jwt), 'source'));
+        $this->send($jwt, 'alice@example.org');
+        $this->assertStatus(422);
+    }
+
+    public function testArbitraryAddressesAreRefused(): void
+    {
+        $jwt = 'Bearer '.$this->jwtFor($this->createUser('alice@example.org'));
+
+        $this->send($jwt, 'ceo@example.test');
+        $this->assertStatus(422);
+        $this->send($jwt, 'not an address <<');
+        $this->assertStatus(422);
+    }
+
+    public function testAdminsManageSenderAddressesAndTheDefault(): void
+    {
+        $admin = 'Bearer '.$this->jwtFor($this->createUser('admin@example.org', ['ROLE_ADMIN']));
+        $jwt = 'Bearer '.$this->jwtFor($this->createUser('alice@example.org'));
+
+        $this->api('GET', '/api/settings', authorization: $admin);
+        $support = $this->api('POST', '/api/sender_addresses', ['email' => 'Support@Example.test', 'name' => 'Support', 'isDefault' => true], $admin);
+        $this->assertStatus(201);
+        self::assertSame('support@example.test', $support['email']);
+
+        $list = $this->api('GET', '/api/sender_addresses', authorization: $admin);
+        self::assertSame(['support@example.test', 'no-reply@example.test'], array_column($list, 'email'));
+        self::assertSame([true, false], array_column($list, 'isDefault'));
+        self::assertSame('Support <support@example.test>', $this->send($jwt)['from']);
+        self::assertSame('Rocket Test <no-reply@example.test>', $this->send($jwt, 'no-reply@example.test')['from']);
+
+        // Removing the default promotes another address.
+        $this->api('DELETE', '/api/sender_addresses/'.$support['id'], authorization: $admin);
+        $this->assertStatus(204);
+        self::assertSame([true], array_column($this->api('GET', '/api/sender_addresses', authorization: $admin), 'isDefault'));
+    }
+
+    public function testInstallDefaultIsSeededOnlyOnce(): void
+    {
+        $admin = 'Bearer '.$this->jwtFor($this->createUser('admin@example.org', ['ROLE_ADMIN']));
+
+        $this->api('GET', '/api/settings', authorization: $admin);
+        $senders = $this->api('GET', '/api/sender_addresses', authorization: $admin);
+        $this->api('DELETE', '/api/sender_addresses/'.$senders[0]['id'], authorization: $admin);
+
+        $this->api('GET', '/api/settings', authorization: $admin);
+        self::assertSame([], $this->api('GET', '/api/sender_addresses', authorization: $admin));
+        // Without sender addresses, the user's own address becomes the default.
+        self::assertSame([true], array_column($this->api('GET', '/api/senders', authorization: $admin), 'default'));
+    }
+
+    public function testOnlyAdminsChangeSettings(): void
+    {
+        $jwt = 'Bearer '.$this->jwtFor($this->createUser('alice@example.org'));
+
+        $this->api('GET', '/api/sender_addresses', authorization: $jwt);
+        $this->assertStatus(403);
+        $this->api('PATCH', '/api/settings', ['personalFromAllowed' => false], $jwt);
+        $this->assertStatus(403);
+    }
+
+    public function testApplicationsImposeAddressesOnTheirOwnDomains(): void
+    {
+        $this->createUser('alice@example.org');
+        [$application, $token] = $this->createApplication();
+        $application->setAllowedSenders(['*@crm.example.com', 'direction@example.com']);
+        $this->em()->flush();
+        $asAlice = ['X-Impersonate-User' => 'alice@example.org'];
+
+        $email = $this->send('Bearer '.$token, 'Agence Lyon <lyon@crm.example.com>', $asAlice);
+        $this->assertStatus(202);
+        self::assertSame('Agence Lyon <lyon@crm.example.com>', $email['from']);
+        self::assertEmailAddressContains(self::getMailerMessage(), 'Reply-To', 'alice@example.org');
+
+        $this->send('Bearer '.$token, 'direction@example.com', $asAlice);
+        $this->assertStatus(202);
+        $this->send('Bearer '.$token, 'other@example.com', $asAlice);
+        $this->assertStatus(422);
+
+        // The embedded composer gets the same right.
+        $embed = 'Embed '.$this->api('POST', '/api/embed/token', authorization: 'Bearer '.$token, headers: $asAlice)['token'];
+        $this->api('GET', '/api/senders', authorization: $embed);
+        $this->assertStatus(200);
+        $this->send($embed, 'Agence Lyon <lyon@crm.example.com>');
+        $this->assertStatus(202);
+
+        // A user alone cannot use the application's domains.
+        $this->send('Bearer '.$this->jwtFor($this->em()->getRepository(\App\Entity\User::class)->findOneBy(['email' => 'alice@example.org'])), 'lyon@crm.example.com');
+        $this->assertStatus(422);
+    }
+
+    public function testApplicationSenderPatternsAreValidated(): void
+    {
+        $admin = 'Bearer '.$this->jwtFor($this->createUser('admin@example.org', ['ROLE_ADMIN']));
+
+        $this->api('POST', '/api/applications', ['name' => 'CRM', 'allowedSenders' => ['*@*']], $admin);
+        $this->assertStatus(422);
+        $created = $this->api('POST', '/api/applications', ['name' => 'CRM', 'allowedSenders' => ['*@CRM.example.com', 'x@example.com']], $admin);
+        $this->assertStatus(201);
+        self::assertSame(['*@crm.example.com', 'x@example.com'], $created['allowedSenders']);
+    }
+}
