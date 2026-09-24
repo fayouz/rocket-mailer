@@ -13,7 +13,7 @@ export function useApi() {
 
   return async function api<T>(url: string, options: ApiOptions = {}, retried = false): Promise<T> {
     const headers = new Headers(options.headers as HeadersInit | undefined)
-    headers.set('Accept', 'application/json')
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json')
     const authorization = auth.authorizationHeader()
     if (authorization) headers.set('Authorization', authorization)
     if (options.method === 'PATCH') headers.set('Content-Type', 'application/merge-patch+json')

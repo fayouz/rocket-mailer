@@ -2,10 +2,14 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\ExactFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\QueryParameter;
+use App\Doctrine\EmailSearchFilter;
 use App\Enum\EmailStatus;
 use App\Repository\EmailRepository;
 use App\Sender\AddressFormatter;
@@ -22,9 +26,19 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: EmailRepository::class)]
 #[ORM\Index(fields: ['status'])]
+#[ORM\Index(fields: ['createdAt'])]
 #[ApiResource(
     operations: [
-        new GetCollection(normalizationContext: ['groups' => ['email:list', 'user:summary', 'tracking']]),
+        new GetCollection(
+            normalizationContext: ['groups' => ['email:list', 'user:summary', 'tracking']],
+            parameters: [
+                'q' => new QueryParameter(filter: new EmailSearchFilter(), description: 'Search in the subject, the sender address and the recipients'),
+                'status' => new QueryParameter(filter: new ExactFilter(), property: 'status', schema: ['type' => 'string', 'enum' => ['queued', 'sent', 'failed']]),
+                'sender' => new QueryParameter(filter: new ExactFilter(), property: 'sender', description: 'User id', constraints: [new Assert\Uuid()]),
+                'application' => new QueryParameter(filter: new ExactFilter(), property: 'application', description: 'Application id', constraints: [new Assert\Uuid()]),
+                'createdAt' => new QueryParameter(filter: new DateFilter(), property: 'createdAt', description: 'createdAt[after]=2026-09-01&createdAt[before]=2026-09-30'),
+            ],
+        ),
         new Get(security: "is_granted('ROLE_ADMIN') or object.getSender() == user"),
         new Post(processor: EmailSendProcessor::class, status: 202),
     ],

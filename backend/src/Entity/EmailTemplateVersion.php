@@ -64,7 +64,8 @@ class EmailTemplateVersion implements LogEntryInterface
         return $this->action;
     }
 
-    public function setUsername(string $username): void
+    /** Null when there is no authenticated user (console commands, fixtures). */
+    public function setUsername(?string $username): void
     {
         $this->username = $username;
     }

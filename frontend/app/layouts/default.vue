@@ -5,12 +5,18 @@ const auth = useAuth()
 
 const items = computed<NavigationMenuItem[][]>(() => [
   [
+    { label: 'Tableau de bord', icon: 'i-lucide-layout-dashboard', to: '/' },
+  ],
+  [
+    { label: 'Messagerie', type: 'label' },
     { label: 'Nouveau message', icon: 'i-lucide-send', to: '/compose' },
-    { label: 'Envoyés', icon: 'i-lucide-inbox', to: '/emails' },
+    { label: 'Mes envois', icon: 'i-lucide-inbox', to: '/emails', exact: true },
+    ...(auth.isAdmin.value ? [{ label: 'Tous les envois', icon: 'i-lucide-mails', to: '/emails/all' }] : []),
     { label: 'Templates', icon: 'i-lucide-layout-template', to: '/templates' },
   ],
   auth.isAdmin.value
     ? [
+        { label: 'Administration', type: 'label' },
         { label: 'Utilisateurs', icon: 'i-lucide-users', to: '/users' },
         { label: 'Applications', icon: 'i-lucide-key-round', to: '/applications' },
         { label: 'Réglages', icon: 'i-lucide-settings', to: '/settings' },
@@ -30,10 +36,8 @@ const items = computed<NavigationMenuItem[][]>(() => [
       </template>
 
       <template #default="{ collapsed }">
-        <UNavigationMenu :items="items[0]" :collapsed="collapsed" orientation="vertical" />
-        <template v-if="items[1]?.length">
-          <USeparator />
-          <UNavigationMenu :items="items[1]" :collapsed="collapsed" orientation="vertical" />
+        <template v-for="(group, index) in items" :key="index">
+          <UNavigationMenu v-if="group.length" :items="group" :collapsed="collapsed" orientation="vertical" />
         </template>
       </template>
 

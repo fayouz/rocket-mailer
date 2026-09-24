@@ -76,7 +76,8 @@ const columns: TableColumn<User>[] = [
 ]
 
 // Create a local user
-const createOpen = ref(false)
+// Opened directly by "Nouvel utilisateur" on the dashboard.
+const createOpen = ref(Boolean(useRoute().query.new))
 const newUser = reactive({ email: '', firstName: '', lastName: '', plainPassword: '', admin: false })
 async function createUser() {
   try {

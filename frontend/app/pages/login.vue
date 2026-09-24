@@ -15,7 +15,7 @@ async function submit() {
     await auth.login(state.email, state.password)
     const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//')
       ? route.query.redirect
-      : '/compose'
+      : '/'
     await navigateTo(redirect)
   }
   catch (e) {

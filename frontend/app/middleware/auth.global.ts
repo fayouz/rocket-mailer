@@ -5,7 +5,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const auth = useAuth()
 
   if (to.path === '/login') {
-    return auth.token.value ? navigateTo('/compose') : undefined
+    return auth.token.value ? navigateTo('/') : undefined
   }
 
   if (!auth.token.value) {
@@ -22,6 +22,6 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   if (to.meta.admin && !auth.isAdmin.value) {
-    return navigateTo('/compose')
+    return navigateTo('/')
   }
 })

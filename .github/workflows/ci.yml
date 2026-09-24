@@ -183,6 +183,9 @@ jobs:
           curl -fsS "http://localhost:4000/token?user=alice%40example.org" | jq -e .token
           curl -fsSI "http://localhost:3000/embed/compose?app=$APP_ID" | grep -i "frame-ancestors http://localhost:4000"
           curl -fsS http://localhost:8025/ -o /dev/null
+          # Dashboard: the whole platform and service details for admins
+          curl -fsS http://localhost:3000/api/dashboard -H "Authorization: Bearer $TOKEN" \
+            | jq -e '.scope == "platform" and (.daily | length) == 30 and ([.health.services[] | select(.id == "database" or .id == "ldap") | .status] == ["operational", "operational"])'
           # Sending goes through the async worker and reaches Mailpit
           ALICE=$(curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -r .token)

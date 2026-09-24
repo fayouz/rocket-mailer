@@ -40,6 +40,10 @@ cd frontend && npm install && npm run dev            # NUXT_PUBLIC_API_BASE=http
 
 ## Fonctionnalités
 
+### Tableau de bord et suivi des envois
+- **Tableau de bord** (page d'accueil) : envois et délivrabilité sur 30 jours, file d'envoi, intégrations, activité récente, état des services (base, file, SMTP, LDAP, stockage). Un utilisateur y voit ses propres chiffres ; un administrateur, toute la plateforme. API : `GET /api/dashboard`.
+- **Mes envois** et **Tous les envois** (admin) : recherche dans l'objet et les destinataires, filtres par statut, application, expéditeur et période, pagination. Les mêmes filtres existent dans l'API (`GET /api/emails?q=…&status=…`).
+
 ### Utilisateurs et LDAP
 - Comptes **locaux** (mot de passe haché) ou **LDAP** (authentification par bind sur l'annuaire).
 - Synchronisation : `php bin/console app:ldap:sync [--dry-run]` (à planifier en cron) ou bouton « Synchroniser LDAP » (admin).

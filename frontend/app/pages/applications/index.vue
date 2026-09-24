@@ -68,6 +68,11 @@ function create() {
   formOpen.value = true
 }
 
+// "Nouvelle application" from the dashboard.
+onMounted(() => {
+  if (useRoute().query.new) create()
+})
+
 function edit(application: Application) {
   editing.value = application
   Object.assign(form, {

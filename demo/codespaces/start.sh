@@ -7,6 +7,7 @@ if [ -n "${CODESPACE_NAME:-}" ]; then
   public_url() { echo "https://${CODESPACE_NAME}-$1.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"; }
   export DEMO_MAILER_URL="$(public_url 3000)"
   export DEMO_HOST_ORIGIN="$(public_url 4000)"
+  export PUBLIC_MAILPIT_URL="$(public_url 8025)"
 else
   DEMO_MAILER_URL=http://localhost:3000
   DEMO_HOST_ORIGIN=http://localhost:4000
