@@ -6,6 +6,7 @@ Envoi d'emails en texte enrichi, templates d'email visuels, et composeur embarqu
 |---|---|
 | `backend/` | Symfony 8.1, API Platform 5, Doctrine ORM 3 (PostgreSQL), StofDoctrineExtensions, LexikJWT, Messenger, Mailer, LDAP |
 | `frontend/` | Nuxt 4, Nuxt UI 4, CKEditor 5 (composeur), GrapesJS + preset newsletter (templates) |
+| `docs/` | Site de documentation (Nuxt UI + Nuxt Content) : `cd docs && npm install && npm run dev`, puis http://localhost:3001 |
 
 ## Démarrage rapide
 
