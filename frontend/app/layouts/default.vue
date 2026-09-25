@@ -23,7 +23,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
     ? [
         { label: 'Administration', type: 'label' },
         { label: 'Utilisateurs', icon: 'i-lucide-users', to: '/users' },
-        { label: 'Annuaire LDAP', icon: 'i-lucide-network', to: '/ldap' },
+        { label: 'Serveurs d’authentification', icon: 'i-lucide-shield-check', to: '/authentication-servers' },
         { label: 'Applications', icon: 'i-lucide-key-round', to: '/applications' },
         { label: 'Boîtes d’envoi', icon: 'i-lucide-mailbox', to: '/mailboxes' },
         { label: 'Layouts d’email', icon: 'i-lucide-panels-top-left', to: '/layouts' },

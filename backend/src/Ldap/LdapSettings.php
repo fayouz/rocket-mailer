@@ -2,14 +2,17 @@
 
 namespace App\Ldap;
 
+use App\Entity\AuthenticationServer;
+use App\Enum\AuthenticationServerType;
 use App\Mailbox\SecretBox;
+use App\Repository\AuthenticationServerRepository;
 use App\Sender\Settings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\Service\ResetInterface;
 
 /**
- * The LDAP configuration, stored in the database and managed by administrators (bind password encrypted).
+ * The LDAP configuration, stored in AuthenticationServer and managed by administrators (bind password encrypted).
  * The LDAP_* environment variables (.env) are the default configuration: used until it is saved once,
  * and again after resetToDefaults().
  */
@@ -23,6 +26,7 @@ class LdapSettings implements ResetInterface
         private readonly Settings $settings,
         private readonly SecretBox $secrets,
         private readonly EntityManagerInterface $em,
+        private readonly AuthenticationServerRepository $servers,
         #[Autowire(env: 'bool:LDAP_ENABLED')] private readonly bool $envEnabled,
         #[Autowire(env: 'LDAP_URL')] private readonly string $envUrl,
         #[Autowire(env: 'LDAP_BASE_DN')] private readonly string $envBaseDn,
@@ -48,6 +52,10 @@ class LdapSettings implements ResetInterface
             return $this->cached;
         }
 
+        if (null !== $server = $this->servers->findLdap()) {
+            return $this->cached = $this->fromEntity($server);
+        }
+
         $stored = $this->settings->get(self::KEY);
         if (!\is_array($stored)) {
             return $this->cached = $this->fromEnvironment();
@@ -62,7 +70,12 @@ class LdapSettings implements ResetInterface
     /** Saved from the administration at least once (else: environment variables). */
     public function isStored(): bool
     {
-        return \is_array($this->settings->get(self::KEY));
+        return null !== $this->servers->findLdap() || \is_array($this->settings->get(self::KEY));
+    }
+
+    public function getServerType(): AuthenticationServerType
+    {
+        return $this->servers->findLdap()?->getType() ?? AuthenticationServerType::Ldap;
     }
 
     /**
@@ -83,6 +96,9 @@ class LdapSettings implements ResetInterface
     /** Forgets the saved configuration: back to the LDAP_* environment variables. */
     public function resetToDefaults(): void
     {
+        if (null !== $server = $this->servers->findLdap()) {
+            $this->em->remove($server);
+        }
         $this->settings->remove(self::KEY);
         $this->em->flush();
         $this->cached = null;
@@ -90,10 +106,22 @@ class LdapSettings implements ResetInterface
 
     public function save(LdapConfig $config): void
     {
-        $data = $config->toPublicArray();
-        unset($data['hasBindPassword']);
-        $data['bindPassword'] = '' === $config->bindPassword ? '' : $this->secrets->encrypt($config->bindPassword);
-        $this->settings->set(self::KEY, $data);
+        $server = $this->servers->findLdap() ?? new AuthenticationServer();
+        $server
+            ->setName('LDAP')
+            ->setEnabled($config->enabled)
+            ->setUrl($config->url)
+            ->setStartTls($config->startTls)
+            ->setBaseDn($config->baseDn)
+            ->setBindDn($config->bindDn)
+            ->setBindPassword('' === $config->bindPassword ? '' : $this->secrets->encrypt($config->bindPassword))
+            ->setUserFilter($config->userFilter)
+            ->setAdminGroupDn($config->adminGroupDn)
+            ->setAttributes($config->attributes);
+        if (null === $server->getCreatedAt()) {
+            $this->em->persist($server);
+        }
+        $this->settings->remove(self::KEY);
         $this->em->flush();
         $this->cached = $config;
     }
@@ -116,6 +144,26 @@ class LdapSettings implements ResetInterface
             adminGroupDn: $this->envAdminGroupDn,
             startTls: $this->envStartTls,
             attributes: LdapConfig::fromArray(['attributes' => $this->envAttributes])->attributes,
+        );
+    }
+
+    private function fromEntity(AuthenticationServer $server): LdapConfig
+    {
+        $password = $server->getBindPassword();
+        if ('' !== $password) {
+            $password = $this->secrets->decrypt($password);
+        }
+
+        return new LdapConfig(
+            enabled: $server->isEnabled(),
+            url: $server->getUrl(),
+            baseDn: $server->getBaseDn(),
+            bindDn: $server->getBindDn(),
+            bindPassword: $password,
+            userFilter: $server->getUserFilter(),
+            adminGroupDn: $server->getAdminGroupDn(),
+            startTls: $server->hasStartTls(),
+            attributes: LdapConfig::fromArray(['attributes' => $server->getAttributes()])->attributes,
         );
     }
 }

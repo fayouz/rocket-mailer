@@ -3,6 +3,7 @@
 namespace App\Ldap;
 
 use App\Entity\User;
+use App\Repository\AuthenticationServerRepository;
 use App\Enum\UserSource;
 use App\Repository\UserRepository;
 use App\Security\Roles;
@@ -14,6 +15,7 @@ final class LdapUserSynchronizer
     public function __construct(
         private readonly UserDirectoryInterface $directory,
         private readonly UserRepository $users,
+        private readonly AuthenticationServerRepository $servers,
         private readonly EntityManagerInterface $em,
         private readonly LockFactory $lockFactory,
     ) {
@@ -41,6 +43,7 @@ final class LdapUserSynchronizer
     {
         $report = new SyncReport($dryRun);
         $now = new \DateTimeImmutable();
+        $authenticationServer = $this->servers->findLdap();
 
         $byDn = [];
         $byEmail = [];
@@ -85,6 +88,7 @@ final class LdapUserSynchronizer
                 ->setRoles($roles)
                 ->setPassword(null)
                 ->setEnabled(true)
+                ->setAuthenticationServer($authenticationServer)
                 ->setLdapSyncedAt($now);
 
             $seen[spl_object_id($user)] = true;

@@ -77,6 +77,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:read'])]
     private ?string $ldapDn = null;
 
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?AuthenticationServer $authenticationServer = null;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['user:read'])]
     private ?\DateTimeImmutable $ldapSyncedAt = null;
@@ -205,6 +209,24 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->ldapDn = $ldapDn;
 
         return $this;
+    }
+
+    public function getAuthenticationServer(): ?AuthenticationServer
+    {
+        return $this->authenticationServer;
+    }
+
+    public function setAuthenticationServer(?AuthenticationServer $authenticationServer): static
+    {
+        $this->authenticationServer = $authenticationServer;
+
+        return $this;
+    }
+
+    #[Groups(['user:read'])]
+    public function getAuthenticationServerName(): ?string
+    {
+        return $this->authenticationServer?->getName();
     }
 
     public function getLdapSyncedAt(): ?\DateTimeImmutable

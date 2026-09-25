@@ -49,7 +49,7 @@ final class LdapConfigTest extends WebTestCase
         self::assertTrue($saved['hasBindPassword']);
         self::assertStringNotContainsString('s3cret-bind', json_encode($saved));
 
-        $stored = $this->em()->getConnection()->fetchOne("SELECT value FROM setting WHERE name = 'ldap'");
+        $stored = $this->em()->getConnection()->fetchOne("SELECT bind_password FROM authentication_server WHERE type = 'ldap'");
         self::assertStringNotContainsString('s3cret-bind', $stored);
         self::assertStringContainsString('v1:', $stored);
 

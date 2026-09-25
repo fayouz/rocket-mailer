@@ -16,6 +16,7 @@ export interface UserSummary {
 export interface User extends UserSummary, Tracked {
   roles: string[]
   source: 'local' | 'ldap'
+  authenticationServerName: string | null
   ldapDn: string | null
   ldapSyncedAt: string | null
   enabled: boolean
@@ -291,6 +292,20 @@ export interface Dashboard {
 export interface Collection<T> {
   member: T[]
   totalItems: number
+}
+
+export interface AuthenticationServer extends Tracked {
+  id: string
+  name: string
+  type: 'ldap'
+  enabled: boolean
+  url: string
+}
+
+export interface AuthenticationServerDiscoveryCandidate {
+  url: string
+  reachable: boolean
+  latencyMs: number | null
 }
 
 export interface LdapAttributes {
