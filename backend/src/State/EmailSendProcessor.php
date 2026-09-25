@@ -4,7 +4,10 @@ namespace App\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Entity\Application;
 use App\Entity\Email;
+use App\Entity\Mailbox;
+use App\Repository\MailboxRepository;
 use App\Message\SendEmailMessage;
 use App\Security\ActorContext;
 use App\Security\Roles;
@@ -15,6 +18,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Mime\Address;
 
 /**
  * Stores the email as queued, sent on behalf of the current user (possibly through an application), then dispatches it.
@@ -30,6 +34,7 @@ final class EmailSendProcessor implements ProcessorInterface
         private readonly Security $security,
         private readonly MessageBusInterface $bus,
         private readonly SenderPolicy $senders,
+        private readonly MailboxRepository $mailboxes,
         #[Autowire(env: 'int:ATTACHMENTS_MAX_TOTAL_SIZE')] private readonly int $maxTotalAttachmentSize,
     ) {
     }
@@ -39,7 +44,13 @@ final class EmailSendProcessor implements ProcessorInterface
         $user = $this->actor->requireUser();
         $application = $this->actor->getApplication();
         // First: resolving may flush (first-run seeding of the sender addresses).
-        $data->applyFrom($this->senders->resolve($data->getRequestedFrom(), $user, $application));
+        $mailbox = $this->resolveMailbox($data, $application);
+        if (null !== $mailbox) {
+            $data->setMailbox($mailbox);
+            $data->applyFrom($mailbox->toAddress());
+        } else {
+            $data->applyFrom($this->senders->resolve($data->getRequestedFrom(), $user, $application));
+        }
 
         $template = $data->getTemplate();
         if (null !== $template && !$template->isShared() && $template->getOwner() !== $user && !$this->security->isGranted(Roles::ADMIN)) {
@@ -74,6 +85,45 @@ final class EmailSendProcessor implements ProcessorInterface
     }
 
     /**
+     * The sending mailbox: given explicitly ("mailbox"), or designated by its address in "from".
+     * Through an application, only its own mailboxes; otherwise, those available to all users.
+     */
+    private function resolveMailbox(Email $email, ?Application $application): ?Mailbox
+    {
+        $requested = null;
+        if (null !== $email->getRequestedFrom() && '' !== trim($email->getRequestedFrom())) {
+            try {
+                $requested = mb_strtolower(Address::create(trim($email->getRequestedFrom()))->getAddress());
+            } catch (\Throwable) {
+                $requested = null; // Reported by SenderPolicy.
+            }
+        }
+
+        $mailbox = $email->getMailbox();
+        if (null === $mailbox) {
+            if (null === $requested) {
+                return null;
+            }
+            foreach ($this->mailboxes->usableBy($application) as $candidate) {
+                if ($candidate->getEmail() === $requested) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        }
+
+        if (!$mailbox->isUsableBy($application)) {
+            throw new UnprocessableEntityHttpException(\sprintf('The mailbox "%s" cannot be used here.', $mailbox->getName()));
+        }
+        if (null !== $requested && $requested !== $mailbox->getEmail()) {
+            throw new UnprocessableEntityHttpException('"from" and "mailbox" designate different addresses.');
+        }
+
+        return $mailbox;
+    }
+
+    /**
      * Fills the subject and the body from the template when they are missing, then replaces the variables.
      * Every variable of the template must end up with a value (given, or its default): no "{{ … }}" is ever sent.
      */
@@ -82,7 +132,7 @@ final class EmailSendProcessor implements ProcessorInterface
         $template = $email->getTemplate();
         if (null !== $template) {
             if ('' === trim($email->getHtmlBody())) {
-                $email->setHtmlBody($template->getHtml());
+                $email->setHtmlBody($template->getRenderedHtml());
             }
             if ('' === trim($email->getSubject())) {
                 $email->setSubject($template->getDefaultSubject() ?? '');

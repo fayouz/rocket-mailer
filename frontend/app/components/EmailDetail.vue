@@ -60,6 +60,15 @@ async function download(attachment: Attachment) {
           <dt class="text-muted">
             Via
           </dt><dd>{{ email.applicationName ?? 'Rocket Mailer' }}</dd>
+          <template v-if="email.mailboxName">
+            <dt class="text-muted">
+              Boîte
+            </dt>
+            <dd class="flex flex-wrap items-center gap-2">
+              {{ email.mailboxName }}
+              <UBadge v-if="email.archivedIn" :label="`Copie dans « ${email.archivedIn} »`" color="success" variant="subtle" size="sm" icon="i-lucide-archive" />
+            </dd>
+          </template>
         </dl>
         <div v-if="email.attachments?.length" class="flex flex-wrap gap-2">
           <UButton
@@ -74,6 +83,14 @@ async function download(attachment: Attachment) {
           />
         </div>
         <UAlert v-if="email.errorMessage" color="error" variant="subtle" :description="email.errorMessage" />
+        <UAlert
+          v-if="email.archiveError"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-archive-x"
+          title="Email envoyé, mais la copie n’a pas pu être rangée dans la boîte"
+          :description="email.archiveError"
+        />
         <!-- Email HTML is untrusted: render it in a sandbox without scripts or same-origin access. -->
         <iframe
           :srcdoc="email.htmlBody"

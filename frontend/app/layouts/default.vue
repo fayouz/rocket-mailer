@@ -2,6 +2,11 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 
 const auth = useAuth()
+const { version, updateAvailable, load: loadVersion } = useAppVersion()
+
+watch(() => auth.me.value, (me) => {
+  if (me) loadVersion()
+}, { immediate: true })
 
 const items = computed<NavigationMenuItem[][]>(() => [
   [
@@ -18,8 +23,12 @@ const items = computed<NavigationMenuItem[][]>(() => [
     ? [
         { label: 'Administration', type: 'label' },
         { label: 'Utilisateurs', icon: 'i-lucide-users', to: '/users' },
+        { label: 'Annuaire LDAP', icon: 'i-lucide-network', to: '/ldap' },
         { label: 'Applications', icon: 'i-lucide-key-round', to: '/applications' },
+        { label: 'Boîtes d’envoi', icon: 'i-lucide-mailbox', to: '/mailboxes' },
+        { label: 'Layouts d’email', icon: 'i-lucide-panels-top-left', to: '/layouts' },
         { label: 'Réglages', icon: 'i-lucide-settings', to: '/settings' },
+        { label: 'Mises à jour', icon: updateAvailable.value ? 'i-lucide-circle-arrow-up' : 'i-lucide-refresh-cw', to: '/updates' },
       ]
     : [],
 ])
@@ -42,21 +51,32 @@ const items = computed<NavigationMenuItem[][]>(() => [
       </template>
 
       <template #footer="{ collapsed }">
-        <div class="flex w-full items-center gap-2">
-          <UUser
-            v-if="auth.me.value?.user && !collapsed"
-            :name="auth.me.value.user.displayName"
-            :description="auth.me.value.user.email"
-            size="sm"
-            class="min-w-0 flex-1"
-          />
-          <UButton
-            icon="i-lucide-log-out"
-            color="neutral"
-            variant="ghost"
-            aria-label="Se déconnecter"
-            @click="auth.logout()"
-          />
+        <div class="flex w-full flex-col gap-2">
+          <template v-if="!collapsed">
+            <NuxtLink v-if="auth.isAdmin.value" to="/updates" class="flex items-center gap-2 px-2 text-xs text-muted hover:text-default" data-testid="app-version">
+              <span class="truncate">Version {{ version }}</span>
+              <UBadge v-if="updateAvailable" label="Nouveau" size="sm" variant="subtle" icon="i-lucide-circle-arrow-up" class="shrink-0" />
+            </NuxtLink>
+            <p v-else class="px-2 text-xs text-muted" data-testid="app-version">
+              Version {{ version }}
+            </p>
+          </template>
+          <div class="flex w-full items-center gap-2">
+            <UUser
+              v-if="auth.me.value?.user && !collapsed"
+              :name="auth.me.value.user.displayName"
+              :description="auth.me.value.user.email"
+              size="sm"
+              class="min-w-0 flex-1"
+            />
+            <UButton
+              icon="i-lucide-log-out"
+              color="neutral"
+              variant="ghost"
+              aria-label="Se déconnecter"
+              @click="auth.logout()"
+            />
+          </div>
         </div>
       </template>
     </UDashboardSidebar>

@@ -12,6 +12,7 @@ use App\Repository\ApplicationRepository;
 use App\State\ApplicationCreateProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Mime\Address;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -82,6 +83,21 @@ class Application
     #[Assert\All([new Assert\Regex(pattern: '/^(\*|[^@\s*]+)@[a-z0-9-]+(\.[a-z0-9-]+)+$/i', message: 'Use an email address or "*@domain".')])]
     #[Groups(['app:read', 'app:write'])]
     private array $allowedSenders = [];
+
+    /**
+     * The application's own sender: the default "From" of its composer and of its API sends.
+     * Required: an application never sends from the platform's addresses (settings, Rocket Mailer).
+     */
+    #[ORM\Column(length: 180, nullable: true)]
+    #[Assert\Email]
+    #[Assert\Length(max: 180)]
+    #[Groups(['app:read', 'app:write'])]
+    private ?string $senderEmail = null;
+
+    #[ORM\Column(length: 120, nullable: true)]
+    #[Assert\Length(max: 120)]
+    #[Groups(['app:read', 'app:write'])]
+    private ?string $senderName = null;
 
     #[ORM\Column]
     #[Groups(['app:read', 'app:write'])]
@@ -242,5 +258,35 @@ class Application
     public function getLastUsedAt(): ?\DateTimeImmutable
     {
         return $this->lastUsedAt;
+    }
+
+    public function getSenderEmail(): ?string
+    {
+        return $this->senderEmail;
+    }
+
+    public function setSenderEmail(?string $senderEmail): static
+    {
+        $this->senderEmail = null === $senderEmail || '' === trim($senderEmail) ? null : mb_strtolower(trim($senderEmail));
+
+        return $this;
+    }
+
+    public function getSenderName(): ?string
+    {
+        return $this->senderName;
+    }
+
+    public function setSenderName(?string $senderName): static
+    {
+        $this->senderName = null === $senderName || '' === trim($senderName) ? null : trim($senderName);
+
+        return $this;
+    }
+
+    /** The application's own sender, null when not configured yet. */
+    public function getSenderAddress(): ?Address
+    {
+        return null === $this->senderEmail ? null : new Address($this->senderEmail, $this->senderName ?? '');
     }
 }

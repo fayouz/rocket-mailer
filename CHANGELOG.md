@@ -6,6 +6,43 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Santé des boîtes d'envoi et de l'annuaire LDAP** sur le tableau de bord :
+  - le worker vérifie toutes les 5 minutes (Symfony Scheduler) chaque boîte active (connexion et authentification SMTP, IMAP si la copie est activée) et le serveur LDAP (authentification du compte de service, lecture de la base) ;
+  - le tableau de bord affiche l'état de chaque boîte, l'erreur éventuelle et depuis quand un service est en échec ; bouton **Vérifier** pour relancer tout de suite ;
+  - commande `app:health:check` (code de sortie 1 en cas d'échec, pour une supervision) ; API `POST /api/health/check`.
+
+- **Version et mises à jour** :
+  - la version installée s'affiche en bas du menu ; les administrateurs voient un badge **Nouveau** quand une version plus récente est publiée ;
+  - page Administration → **Mises à jour** : version installée, dernière version publiée sur GitHub avec ses notes, et bouton **Mettre à jour** ;
+  - trois **méthodes de mise à jour**, au choix dans la page :
+    - **Docker** : le service optionnel `updater` (Watchtower, profil `updater`) télécharge les nouvelles images et redémarre les conteneurs ;
+    - **serveur sans Docker** : la tâche planifiée `app:update:run` lance `deploy/update.sh` (git, composer, npm, migrations, redémarrage), avec journal en direct et retour à la version précédente en cas d'échec ;
+    - **manuelle** : la page donne les commandes à lancer ;
+  - la page se recharge sur la nouvelle version ; l'historique garde chaque mise à jour ;
+  - les images Docker portent leur version (`git describe --tags`). Nouvelles variables : `UPDATE_REPOSITORY`, `UPDATE_METHOD`, `UPDATER_URL`, `UPDATER_TOKEN`, `UPDATE_SCRIPT`, `UPDATE_RESTART_COMMAND`. API : `GET /api/system/version`, `GET` et `POST /api/system/update`, `PUT /api/system/update/method`.
+
+- **Layouts d'email** (Administration → Layouts d'email) : une enveloppe HTML commune (en-tête, pied de page, charte) avec l'emplacement `{{ content }}`.
+  - Deux modèles de départ et un aperçu avec un contenu d'exemple.
+  - Chaque template choisit son layout (ou aucun), avec un bouton **Aperçu** ; le choix est versionné.
+  - Le composeur importe le HTML final, et l'API l'utilise pour un envoi par template. `GET /api/email_templates/{id}` renvoie `layout` et `renderedHtml`.
+  - Démo : le layout « Charte Démo CRM » et le template « Confirmation de rendez-vous ».
+
+- **Configuration LDAP dans l'administration** (Administration → Annuaire LDAP) :
+  - URL, STARTTLS, base de recherche, compte de service, filtre, groupe des administrateurs et correspondance des attributs (utile pour Active Directory) ;
+  - stockée en base, avec le mot de passe du compte de service chiffré, et appliquée sans redémarrage ;
+  - bouton **Tester** avec aperçu des utilisateurs trouvés, avant d'enregistrer ;
+  - les variables `LDAP_*` du `.env` restent la configuration par défaut (nouvelles : `LDAP_START_TLS`, `LDAP_ATTRIBUTE_*`), et on peut y revenir d'un clic.
+
+- **Boîtes d'envoi** (Administration → Boîtes d'envoi) : de vrais comptes email depuis lesquels envoyer.
+  - Envoi par leur serveur SMTP, ou par un fournisseur (API) : Brevo, Amazon SES, Mailjet, SendGrid, Postmark, Mailgun.
+  - Copie de chaque email dans leur dossier « Envoyés » par IMAP : dossier détecté, ou créé s'il manque.
+  - Configurations types : Gmail, Microsoft 365, OVHcloud, Infomaniak. Bouton « Tester la connexion » et envoi d'un email de test.
+  - Mots de passe et DSN chiffrés en base (`MAILBOX_ENCRYPTION_KEY`), jamais renvoyés par l'API.
+  - Rattachées aux applications : le composeur de l'application les propose dans la liste « De », à côté des adresses d'envoi. Une boîte peut aussi être ouverte à tous les utilisateurs.
+  - API et widget : `mailbox` dans `POST /api/emails` et `setDraft()`, ou un `from` égal à l'adresse de la boîte. Clients Nuxt et Symfony mis à jour.
+  - Historique : boîte utilisée, dossier de la copie, erreur de copie (l'email reste envoyé).
+  - Démo : la « Boîte commerciale du CRM », avec un serveur IMAP de test (GreenMail).
+
 - **Configuration initiale** : au premier lancement, tant qu'aucun compte n'existe, toutes les pages mènent à un formulaire de création du compte administrateur (email, nom, mot de passe). Il connecte ensuite l'administrateur et le guide vers les Réglages. `SETUP_TOKEN` (optionnel) protège cette étape sur une instance exposée. API : `GET` et `POST /api/setup`.
 
 - **Variables de template** : `{{ client.prenom }}`, `{{ devis.numero }}`…
@@ -24,6 +61,11 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 - La démo (et Codespaces) lance aussi le site de documentation et le changelog, sur le port 3001.
 - Sur Rocket Mailer, `/docs` et `/changelog` redirigent vers la documentation et le changelog. Le tableau de bord a un raccourci « Nouveautés ».
 
+### Modifié
+
+- Le worker consomme aussi les tâches planifiées : `messenger:consume async scheduler_default` (à reprendre dans un service systemd ou supervisord existant).
+- Le tableau de bord occupe toute la largeur de l'écran.
+
 ### Corrigé
 
 - Éditeur de templates : le texte en cours de modification n'était pas enregistré si l'on cliquait sur « Enregistrer » sans quitter le bloc.
@@ -31,6 +73,10 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Sécurité
 
+- **Une application n'envoie plus jamais depuis les adresses de Rocket Mailer** (adresses des Réglages, adresse par défaut de la plateforme) ni depuis l'adresse personnelle de l'utilisateur :
+  - chaque application a son propre **expéditeur** (page Applications, obligatoire pour envoyer) ; l'adresse par défaut de la plateforme y est seulement proposée en suggestion ;
+  - son composeur et ses appels à l'API n'ont droit qu'à cet expéditeur, à ses adresses autorisées et à **ses** boîtes d'envoi (pas celles ouvertes aux utilisateurs de Rocket Mailer) ;
+  - sans expéditeur, le composeur l'indique et l'API répond `422`. **À faire après la mise à jour : renseigner l'expéditeur de chaque application.**
 - Les valeurs des variables sont insérées comme du texte (HTML échappé), et sur une seule ligne dans l'objet.
 
 ## [0.6.0] - 2026-09-24

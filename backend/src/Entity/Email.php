@@ -76,6 +76,30 @@ class Email
     /** "From" as requested by the caller ("Name <email>" or "email"), validated by SenderPolicy. */
     private ?string $requestedFrom = null;
 
+    /**
+     * Sending mailbox: the email leaves through its own SMTP server (or provider) and a copy goes to its
+     * IMAP "Sent" folder. Null: the platform's transport (MAILER_DSN).
+     */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['email:write'])]
+    private ?Mailbox $mailbox = null;
+
+    /** Name of the mailbox at sending time (kept if the mailbox is deleted). */
+    #[ORM\Column(length: 120, nullable: true)]
+    #[Groups(['email:list'])]
+    private ?string $mailboxName = null;
+
+    /** IMAP folder holding the copy, once archived. */
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['email:read'])]
+    private ?string $archivedIn = null;
+
+    /** Why the copy could not be stored (the email itself was sent). */
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['email:read'])]
+    private ?string $archiveError = null;
+
     /** @var list<string> */
     #[ORM\Column(name: 'recipients_to')]
     #[Assert\Count(min: 1, max: self::MAX_RECIPIENTS)]
@@ -270,6 +294,49 @@ class Email
     public function setSubject(string $subject): static
     {
         $this->subject = $subject;
+
+        return $this;
+    }
+
+    public function getMailbox(): ?Mailbox
+    {
+        return $this->mailbox;
+    }
+
+    public function setMailbox(?Mailbox $mailbox): static
+    {
+        $this->mailbox = $mailbox;
+        $this->mailboxName = $mailbox?->getName();
+
+        return $this;
+    }
+
+    public function getMailboxName(): ?string
+    {
+        return $this->mailboxName;
+    }
+
+    public function getArchivedIn(): ?string
+    {
+        return $this->archivedIn;
+    }
+
+    public function getArchiveError(): ?string
+    {
+        return $this->archiveError;
+    }
+
+    public function markArchived(string $folder): static
+    {
+        $this->archivedIn = $folder;
+        $this->archiveError = null;
+
+        return $this;
+    }
+
+    public function markArchiveFailed(string $error): static
+    {
+        $this->archiveError = mb_substr($error, 0, 2000);
 
         return $this;
     }

@@ -36,6 +36,15 @@ final class Settings
         }
     }
 
+    /** Removes the setting; the caller flushes. */
+    public function remove(string $name): void
+    {
+        $setting = $this->settings->find($name);
+        if (null !== $setting) {
+            $this->em->remove($setting);
+        }
+    }
+
     public function isPersonalFromAllowed(): bool
     {
         return (bool) $this->get(self::PERSONAL_FROM_ALLOWED, true);

@@ -3,8 +3,10 @@
 namespace App\Sender;
 
 use App\Entity\Application;
+use App\Entity\Mailbox;
 use App\Entity\SenderAddress;
 use App\Entity\User;
+use App\Repository\MailboxRepository;
 use App\Repository\SenderAddressRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -12,15 +14,23 @@ use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Mime\Address;
 
 /**
- * Decides which "From" addresses a user may send from:
+ * Decides which "From" addresses a user may send from.
+ *
+ * In Rocket Mailer itself:
  * - the sender addresses of the settings (one is the default, seeded from MAILER_DEFAULT_FROM at install);
  * - the user's own address, unless disabled in the settings;
- * - when sending through an application, any address matching that application's allowed senders.
+ * - the sending mailboxes available to all users.
+ *
+ * Through an application (API, embedded composer), never the platform's addresses, only what the application configured:
+ * - its own sender (the default);
+ * - any address matching its allowed senders (imposed with "from");
+ * - its sending mailboxes.
  */
 final class SenderPolicy
 {
     public function __construct(
         private readonly SenderAddressRepository $senders,
+        private readonly MailboxRepository $mailboxes,
         private readonly Settings $settings,
         private readonly EntityManagerInterface $em,
         #[Autowire(env: 'MAILER_DEFAULT_FROM')] private readonly string $installDefault,
@@ -30,10 +40,14 @@ final class SenderPolicy
     /**
      * Addresses offered in the composer, the default first.
      *
-     * @return list<array{from: string, email: string, name: string|null, default: bool, source: 'settings'|'personal'}>
+     * @return list<array{from: string, email: string, name: string|null, default: bool, source: 'settings'|'personal'|'mailbox', mailbox?: string, mailboxName?: string}>
      */
-    public function options(User $user): array
+    public function options(User $user, ?Application $application = null): array
     {
+        if (null !== $application) {
+            return $this->applicationOptions($application);
+        }
+
         $options = array_map(static fn (SenderAddress $sender) => [
             'from' => AddressFormatter::format($sender->toAddress()),
             'email' => $sender->getEmail(),
@@ -55,7 +69,47 @@ final class SenderPolicy
 
         usort($options, static fn (array $a, array $b) => $b['default'] <=> $a['default']);
 
+        // Sending mailboxes shared with all users, after the addresses.
+        foreach ($this->mailboxes->usableBy(null) as $mailbox) {
+            $options[] = self::mailboxOption($mailbox, false);
+        }
+
         return $options;
+    }
+
+    /** @return list<array<string, mixed>> The application's sender first, then its mailboxes; empty when nothing is configured. */
+    private function applicationOptions(Application $application): array
+    {
+        $options = [];
+        $sender = $application->getSenderAddress();
+        if (null !== $sender) {
+            $options[] = [
+                'from' => AddressFormatter::format($sender),
+                'email' => $sender->getAddress(),
+                'name' => $application->getSenderName(),
+                'default' => true,
+                'source' => 'application',
+            ];
+        }
+        foreach ($this->mailboxes->usableBy($application) as $mailbox) {
+            $options[] = self::mailboxOption($mailbox, [] === $options);
+        }
+
+        return $options;
+    }
+
+    /** @return array<string, mixed> */
+    private static function mailboxOption(Mailbox $mailbox, bool $default): array
+    {
+        return [
+            'from' => AddressFormatter::format($mailbox->toAddress()),
+            'email' => $mailbox->getEmail(),
+            'name' => $mailbox->getDisplayName(),
+            'default' => $default,
+            'source' => 'mailbox',
+            'mailbox' => '/api/mailboxes/'.$mailbox->getId()->toRfc4122(),
+            'mailboxName' => $mailbox->getName(),
+        ];
     }
 
     /** Resolves the requested "From" (or the default when empty), or refuses it. */
@@ -63,7 +117,7 @@ final class SenderPolicy
     {
         $requested = trim((string) $requested);
         if ('' === $requested) {
-            return $this->defaultFor($user);
+            return null === $application ? $this->defaultFor($user) : $this->applicationDefault($application);
         }
 
         try {
@@ -75,6 +129,17 @@ final class SenderPolicy
         $email = mb_strtolower($address->getAddress());
         $name = $address->getName();
 
+        if (null !== $application) {
+            if ($email === $application->getSenderEmail()) {
+                return new Address($email, '' !== $name ? $name : ($application->getSenderName() ?? ''));
+            }
+            if ($application->allowsSender($email)) {
+                return new Address($email, $name);
+            }
+
+            throw new UnprocessableEntityHttpException(\sprintf('Sending from "%s" is not allowed for the application "%s": use its sender, one of its allowed senders or one of its mailboxes.', $email, $application->getName()));
+        }
+
         foreach ($this->senders() as $sender) {
             if ($sender->getEmail() === $email) {
                 return new Address($email, '' !== $name ? $name : ($sender->getName() ?? ''));
@@ -85,11 +150,15 @@ final class SenderPolicy
             return new Address($email, '' !== $name ? $name : $user->getDisplayName());
         }
 
-        if (null !== $application && $application->allowsSender($email)) {
-            return new Address($email, $name);
-        }
-
         throw new UnprocessableEntityHttpException(\sprintf('Sending from "%s" is not allowed.', $email));
+    }
+
+    private function applicationDefault(Application $application): Address
+    {
+        return $application->getSenderAddress() ?? throw new UnprocessableEntityHttpException(\sprintf(
+            'The application "%s" has no sender configured: an administrator must set it (Applications), or pass "from" or "mailbox".',
+            $application->getName(),
+        ));
     }
 
     private function defaultFor(User $user): Address

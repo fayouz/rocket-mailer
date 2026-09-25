@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EmailTemplate, TemplateVariable, TemplateVersion } from '~/types/api'
+import type { EmailLayout, EmailTemplate, TemplateVariable, TemplateVersion } from '~/types/api'
 
 const route = useRoute()
 const api = useApi()
@@ -9,7 +9,22 @@ const toast = useToast()
 const id = computed(() => route.params.id as string)
 const isNew = computed(() => id.value === 'new')
 
-const meta = reactive({ name: '', description: '', defaultSubject: '', shared: false })
+const meta = reactive({ name: '', description: '', defaultSubject: '', shared: false, layout: null as string | null })
+
+// Layouts: the organization's wrappers (header, footer…) around the content.
+const { data: layouts } = await useAsyncData('template-layouts', () => api<EmailLayout[]>('/api/email_layouts'), { default: () => [] })
+const layoutItems = computed(() => [
+  { label: 'Aucun layout', value: 'none' },
+  ...layouts.value.map(l => ({ label: l.name, value: `/api/email_layouts/${l.id}`, description: l.description ?? undefined })),
+])
+const previewOpen = ref(false)
+const previewHtml = ref('')
+async function openPreview() {
+  const html = await editor.value?.getHtml() ?? ''
+  const layout = layouts.value.find(l => meta.layout?.endsWith(l.id))
+  previewHtml.value = layout ? wrapInLayout(layout.html, html) : html
+  previewOpen.value = true
+}
 const template = ref<EmailTemplate | null>(null)
 const editorKey = ref(0)
 const editor = useTemplateRef<{
@@ -76,6 +91,7 @@ async function load() {
     description: template.value.description ?? '',
     defaultSubject: template.value.defaultSubject ?? '',
     shared: template.value.shared,
+    layout: template.value.layout?.['@id'] ?? null,
   })
   editorKey.value++
   dirty.value = false
@@ -129,7 +145,7 @@ const versions = ref<TemplateVersion[]>([])
 const restoring = ref<number | null>(null)
 
 const fieldLabels: Record<string, string> = {
-  name: 'nom', description: 'description', defaultSubject: 'objet', html: 'contenu', projectData: 'mise en page', shared: 'partage', variables: 'variables',
+  name: 'nom', description: 'description', defaultSubject: 'objet', html: 'contenu', projectData: 'mise en page', shared: 'partage', variables: 'variables', layout: 'layout',
 }
 
 async function openHistory() {
@@ -167,6 +183,14 @@ onBeforeRouteLeave(() => {
         </template>
         <template #right>
           <UButton
+            icon="i-lucide-eye"
+            label="Aperçu"
+            color="neutral"
+            variant="outline"
+            data-testid="template-preview"
+            @click="openPreview"
+          />
+          <UButton
             icon="i-lucide-braces"
             :label="`Variables${variables.length ? ` (${variables.length})` : ''}`"
             color="neutral"
@@ -203,6 +227,16 @@ onBeforeRouteLeave(() => {
           <UFormField label="Description" class="min-w-56 flex-[2]">
             <UInput v-model="meta.description" :disabled="!canEdit" class="w-full" @update:model-value="dirty = true" />
           </UFormField>
+          <UFormField label="Layout" class="min-w-48">
+            <USelect
+              :model-value="meta.layout ?? 'none'"
+              :items="layoutItems"
+              :disabled="!canEdit"
+              class="w-full"
+              data-testid="template-layout"
+              @update:model-value="(value: string) => { meta.layout = value === 'none' ? null : value; dirty = true }"
+            />
+          </UFormField>
           <USwitch v-model="meta.shared" :disabled="!canEdit" label="Partagé" class="pb-2" @update:model-value="dirty = true" />
         </div>
       </UDashboardToolbar>
@@ -220,6 +254,13 @@ onBeforeRouteLeave(() => {
           @variable-request="pickerOpen = true"
         />
       </ClientOnly>
+
+      <UModal v-model:open="previewOpen" title="Aperçu" description="Le template dans son layout, tel qu’il sera importé dans le composeur." :ui="{ content: 'max-w-4xl' }">
+        <template #body>
+          <!-- Untrusted HTML: sandboxed, no scripts. -->
+          <iframe :srcdoc="previewHtml" sandbox="" title="Aperçu du template" class="h-[70vh] w-full rounded-md border border-default bg-white" data-testid="template-preview-frame" />
+        </template>
+      </UModal>
 
       <UModal v-model:open="pickerOpen" title="Insérer une variable" description="Elle sera remplacée par sa valeur à l’envoi, par exemple le prénom du client.">
         <template #body>

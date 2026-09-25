@@ -14,6 +14,8 @@ x-api-env: &api-env
   JWT_PASSPHRASE: ${JWT_PASSPHRASE:-change-me-in-production}
   # First-run setup (creation of the administrator): optional secret asked by the setup page.
   SETUP_TOKEN: ${SETUP_TOKEN:-}
+  # Encrypts the passwords of the sending mailboxes (empty: derived from APP_SECRET).
+  MAILBOX_ENCRYPTION_KEY: ${MAILBOX_ENCRYPTION_KEY:-}
   CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$$}
   LDAP_ENABLED: ${LDAP_ENABLED:-0}
   LDAP_URL: ${LDAP_URL:-ldap://ldap:389}
@@ -22,6 +24,16 @@ x-api-env: &api-env
   LDAP_SEARCH_PASSWORD: ${LDAP_SEARCH_PASSWORD:-adminpassword}
   LDAP_USER_FILTER: ${LDAP_USER_FILTER:-(objectClass=inetOrgPerson)}
   LDAP_ADMIN_GROUP_DN: ${LDAP_ADMIN_GROUP_DN:-}
+  # Defaults only: once saved in Administration → Annuaire LDAP, the database configuration applies.
+  LDAP_START_TLS: ${LDAP_START_TLS:-0}
+  LDAP_ATTRIBUTE_EMAIL: ${LDAP_ATTRIBUTE_EMAIL:-mail}
+  LDAP_ATTRIBUTE_FIRST_NAME: ${LDAP_ATTRIBUTE_FIRST_NAME:-givenName}
+  LDAP_ATTRIBUTE_LAST_NAME: ${LDAP_ATTRIBUTE_LAST_NAME:-sn}
+  LDAP_ATTRIBUTE_GROUPS: ${LDAP_ATTRIBUTE_GROUPS:-memberOf}
+  # Updates: releases checked on GitHub, and one-click update through the "updater" service (profile "updater").
+  UPDATE_REPOSITORY: ${UPDATE_REPOSITORY:-fayouz/rocket-mailer}
+  UPDATER_URL: ${UPDATER_URL:-http://updater:8080}
+  UPDATER_TOKEN: ${UPDATER_TOKEN:-}
 
 services:
   database:
@@ -38,8 +50,14 @@ services:
       - database_data:/var/lib/postgresql/data
 
   api:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     image: ${API_IMAGE:-rocket-mailer-api}
+    labels: &updatable
+      # Updated by the "updater" service (Watchtower only touches labelled containers).
+      com.centurylinklabs.watchtower.enable: "true"
     environment:
       <<: *api-env
       RUN_MIGRATIONS: "1"
@@ -55,8 +73,9 @@ services:
 
   worker:
     image: ${API_IMAGE:-rocket-mailer-api}
+    labels: *updatable
     environment: *api-env
-    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "-vv"]
+    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_default", "--time-limit=3600", "-vv"]
     restart: unless-stopped
     volumes:
       - jwt_keys:/app/config/jwt
@@ -65,8 +84,12 @@ services:
       - api
 
   front:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     image: ${FRONT_IMAGE:-rocket-mailer-front}
+    labels: *updatable
     environment:
       NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://localhost:8000}
       NUXT_API_INTERNAL_BASE: http://api:80
@@ -82,6 +105,22 @@ services:
     image: axllent/mailpit:latest
     ports:
       - "8025:8025"
+
+  # One-click update (Administration → Mises à jour): pulls the new images of the labelled containers and restarts them.
+  # Needs published images (API_IMAGE=ghcr.io/fayouz/rocket-mailer-api:latest, FRONT_IMAGE=ghcr.io/fayouz/rocket-mailer-front:latest)
+  # and a secret shared with the api: UPDATER_TOKEN. Start with `docker compose --profile updater up -d`.
+  updater:
+    profiles: ["updater"]
+    image: nickfedor/watchtower:1.22
+    environment:
+      WATCHTOWER_HTTP_API_UPDATE: "true"
+      WATCHTOWER_HTTP_API_TOKEN: ${UPDATER_TOKEN:-}
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+    volumes:
+      # Docker access: this container can manage the host's containers. Keep its port unpublished.
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
 
   ldap:
     profiles: ["ldap"]

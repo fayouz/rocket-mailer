@@ -12,6 +12,9 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000
 COPY --from=build /app/.output ./.output
+# Version of the interface ("git describe --tags", passed by the CI).
+ARG APP_VERSION=dev
+ENV NUXT_PUBLIC_APP_VERSION=${APP_VERSION}
 USER node
 EXPOSE 3000
 # Runtime configuration: NUXT_PUBLIC_API_BASE (browser -> API), NUXT_API_INTERNAL_BASE (server -> API).

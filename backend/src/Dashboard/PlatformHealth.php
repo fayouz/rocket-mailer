@@ -2,19 +2,27 @@
 
 namespace App\Dashboard;
 
+use App\Entity\ServiceCheck;
+use App\Health\HealthChecker;
+use App\Ldap\LdapSettings;
+use App\Repository\MailboxRepository;
+use App\Repository\ServiceCheckRepository;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Status of the services Rocket Mailer depends on, for the dashboard.
- * Only cheap checks: nothing here opens a network connection besides the database query.
+ * Only cheap checks: nothing here opens a network connection besides the database queries. The LDAP server and the
+ * sending mailboxes are checked over the network in the background (App\Health\HealthChecker): their last results are read here.
  */
 final class PlatformHealth
 {
     public const OPERATIONAL = 'operational';
     public const DEGRADED = 'degraded';
     public const DOWN = 'down';
+    /** Not checked yet (the scheduler runs every 5 minutes). */
+    public const UNKNOWN = 'unknown';
 
     /** A queued email older than this means the worker is stopped or the SMTP relay is stuck. */
     private const QUEUE_DELAY_WARNING = 300;
@@ -23,9 +31,10 @@ final class PlatformHealth
         private readonly Connection $db,
         private readonly ClockInterface $clock,
         #[Autowire(env: 'MAILER_DSN')] private readonly string $mailerDsn,
-        #[Autowire(env: 'bool:LDAP_ENABLED')] private readonly bool $ldapEnabled,
-        #[Autowire(env: 'LDAP_URL')] private readonly string $ldapUrl,
+        private readonly LdapSettings $ldapSettings,
         #[Autowire(env: 'resolve:ATTACHMENTS_DIR')] private readonly string $attachmentsDir,
+        private readonly ServiceCheckRepository $checks,
+        private readonly MailboxRepository $mailboxes,
     ) {
     }
 
@@ -33,11 +42,16 @@ final class PlatformHealth
     public function check(): array
     {
         $services = [$this->database()];
-        if (self::DOWN !== $services[0]['status']) {
+        $databaseUp = self::DOWN !== $services[0]['status'];
+        $checks = $databaseUp ? $this->checks->allById() : [];
+        if ($databaseUp) {
             $services[] = $this->queue();
         }
         $services[] = $this->mailer();
-        $services[] = $this->ldap(self::DOWN !== $services[0]['status']);
+        if ($databaseUp) {
+            $services[] = $this->mailboxes($checks);
+        }
+        $services[] = $this->ldap($databaseUp, $checks['ldap'] ?? null);
         $services[] = $this->storage();
 
         $statuses = array_column($services, 'status');
@@ -111,23 +125,91 @@ final class PlatformHealth
     }
 
     /** @return array<string, mixed> */
-    private function ldap(bool $databaseUp): array
+    private function ldap(bool $databaseUp, ?ServiceCheck $check): array
     {
-        if (!$this->ldapEnabled) {
+        $config = $this->ldapSettings->get();
+        if (!$config->enabled) {
             return ['id' => 'ldap', 'label' => 'Annuaire LDAP', 'status' => 'disabled', 'detail' => 'Non configuré'];
         }
 
         $row = $databaseUp
             ? $this->db->fetchAssociative("SELECT COUNT(*) AS users, MAX(ldap_synced_at) AS synced FROM \"user\" WHERE source = 'ldap'")
             : ['users' => 0, 'synced' => null];
+        $url = preg_replace('#//[^@/]*@#', '//', $config->url);
 
         return [
             'id' => 'ldap',
             'label' => 'Annuaire LDAP',
-            'status' => self::OPERATIONAL,
-            'detail' => preg_replace('#//[^@/]*@#', '//', $this->ldapUrl),
+            'status' => null === $check ? self::UNKNOWN : ($check->isOk() ? self::OPERATIONAL : self::DOWN),
+            'detail' => null === $check || $check->isOk() ? $url : $url.' · '.$check->getDetail(),
             'users' => (int) $row['users'],
             'lastSyncAt' => null === $row['synced'] ? null : (new \DateTimeImmutable($row['synced']))->format(\DATE_ATOM),
+            'latencyMs' => $check?->getLatencyMs(),
+            'check' => $check?->toArray(),
+        ];
+    }
+
+    /**
+     * Sending mailboxes: last SMTP and IMAP checks of each enabled one.
+     *
+     * @param array<string, ServiceCheck> $checks
+     *
+     * @return array<string, mixed>
+     */
+    private function mailboxes(array $checks): array
+    {
+        $items = [];
+        $failing = [];
+        $unchecked = 0;
+        foreach ($this->mailboxes->findBy(['enabled' => true], ['name' => 'ASC']) as $mailbox) {
+            $smtp = $checks[HealthChecker::mailboxCheckId($mailbox, 'smtp')] ?? null;
+            $imap = $mailbox->isImapEnabled() ? ($checks[HealthChecker::mailboxCheckId($mailbox, 'imap')] ?? null) : null;
+            $problems = array_filter([
+                null !== $smtp && !$smtp->isOk() ? 'envoi : '.$smtp->getDetail() : null,
+                null !== $imap && !$imap->isOk() ? 'IMAP : '.$imap->getDetail() : null,
+            ]);
+            if (null === $smtp || ($mailbox->isImapEnabled() && null === $imap)) {
+                ++$unchecked;
+            }
+            if ($problems) {
+                $failing[] = $mailbox->getName().' ('.implode(' ; ', $problems).')';
+            }
+            $items[] = [
+                'id' => (string) $mailbox->getId(),
+                'name' => $mailbox->getName(),
+                'email' => $mailbox->getEmail(),
+                'status' => match (true) {
+                    [] !== $problems => self::DOWN,
+                    null === $smtp => self::UNKNOWN,
+                    default => self::OPERATIONAL,
+                },
+                'smtp' => $smtp?->toArray(),
+                'imap' => $mailbox->isImapEnabled() ? ($imap?->toArray() ?? ['status' => self::UNKNOWN]) : null,
+            ];
+        }
+
+        $total = \count($items);
+        if (0 === $total) {
+            return ['id' => 'mailboxes', 'label' => 'Boîtes d\'envoi', 'status' => 'disabled', 'detail' => 'Aucune boîte d\'envoi active', 'items' => []];
+        }
+
+        return [
+            'id' => 'mailboxes',
+            'label' => 'Boîtes d\'envoi',
+            'status' => match (true) {
+                \count($failing) === $total => self::DOWN,
+                [] !== $failing => self::DEGRADED,
+                $unchecked === $total => self::UNKNOWN,
+                default => self::OPERATIONAL,
+            },
+            'detail' => match (true) {
+                [] !== $failing => \sprintf('%d sur %d en échec : %s', \count($failing), $total, implode(', ', $failing)),
+                $unchecked === $total => 'Pas encore vérifiées',
+                default => \sprintf('%d boîte(s) joignable(s), SMTP et IMAP', $total),
+            },
+            'total' => $total,
+            'failing' => \count($failing),
+            'items' => $items,
         ];
     }
 

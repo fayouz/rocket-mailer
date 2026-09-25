@@ -35,9 +35,11 @@ trait ApiTestTrait
     }
 
     /** @param list<string> $origins */
-    protected function createApplication(bool $canImpersonate = true, array $origins = ['https://partner.example'], string $name = 'Partner CRM'): array
+    /** The application has its own sender (required to send): "Partner CRM <crm@partner.example>". */
+    protected function createApplication(bool $canImpersonate = true, array $origins = ['https://partner.example'], string $name = 'Partner CRM', ?string $senderEmail = 'crm@partner.example'): array
     {
-        $application = (new Application())->setName($name)->setCanImpersonate($canImpersonate)->setAllowedOrigins($origins);
+        $application = (new Application())->setName($name)->setCanImpersonate($canImpersonate)->setAllowedOrigins($origins)
+            ->setSenderEmail($senderEmail)->setSenderName($name);
         $token = $application->rotateToken();
         $this->em()->persist($application);
         $this->em()->flush();

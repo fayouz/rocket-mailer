@@ -30,6 +30,27 @@ const HEALTH: Record<ServiceStatus, { label: string, dot: string, badge: 'succes
   degraded: { label: 'Dégradé', dot: 'bg-warning', badge: 'warning' },
   down: { label: 'Hors service', dot: 'bg-error', badge: 'error' },
   disabled: { label: 'Désactivé', dot: 'bg-neutral-400 dark:bg-neutral-600', badge: 'neutral' },
+  unknown: { label: 'Non vérifié', dot: 'bg-neutral-300 dark:bg-neutral-700', badge: 'neutral' },
+}
+
+// LDAP and mailboxes are checked over the network by the worker every 5 minutes; "Vérifier" runs them now.
+const checking = ref(false)
+async function checkServices() {
+  if (!data.value) return
+  checking.value = true
+  try {
+    data.value.health = await api<Dashboard['health']>('/api/health/check', { method: 'POST' })
+  }
+  catch (error) {
+    toast.add({ title: 'Vérification impossible', description: apiErrorMessage(error), color: 'error' })
+  }
+  finally {
+    checking.value = false
+  }
+}
+function checkLabel(check: { status: string, detail?: string, checkedAt?: string } | null | undefined, protocol: string): string {
+  if (!check || check.status === 'unknown') return `${protocol} : non vérifié`
+  return check.status === 'operational' ? `${protocol} : OK` : `${protocol} : ${check.detail}`
 }
 const platformStatus = computed(() => ({
   operational: 'Systèmes opérationnels',
@@ -170,7 +191,10 @@ function serviceMetric(service: NonNullable<Dashboard['health']['services']>[num
   switch (service.id) {
     case 'database': return service.latencyMs !== undefined ? `${service.latencyMs} ms` : null
     case 'queue': return `${service.queued ?? 0} en attente`
-    case 'ldap': return service.lastSyncAt ? `Synchro ${timeAgo(service.lastSyncAt, now.value)}` : null
+    case 'ldap': return service.check?.checkedAt
+      ? `Vérifié ${timeAgo(service.check.checkedAt, now.value)}${service.latencyMs ? ` · ${service.latencyMs} ms` : ''}`
+      : service.lastSyncAt ? `Synchro ${timeAgo(service.lastSyncAt, now.value)}` : null
+    case 'mailboxes': return service.total ? `${service.total - (service.failing ?? 0)}/${service.total} OK` : null
     case 'storage': return service.freeBytes ? `${formatSize(service.freeBytes)} libres` : null
     default: return null
   }
@@ -194,7 +218,7 @@ function serviceMetric(service: NonNullable<Dashboard['health']['services']>[num
     </template>
 
     <template #body>
-      <div v-if="data" class="mx-auto flex w-full max-w-7xl flex-col gap-6" data-testid="dashboard">
+      <div v-if="data" class="flex w-full flex-col gap-6" data-testid="dashboard">
         <!-- Greeting, status and illustration -->
         <div class="grid gap-4 lg:grid-cols-5">
           <div class="flex flex-col justify-center gap-3 lg:col-span-3">
@@ -386,9 +410,21 @@ function serviceMetric(service: NonNullable<Dashboard['health']['services']>[num
               <!-- Services -->
               <UCard v-if="data.health.services">
                 <template #header>
-                  <h2 class="font-semibold text-highlighted">
-                    État des services
-                  </h2>
+                  <div class="flex items-center justify-between gap-2">
+                    <h2 class="font-semibold text-highlighted">
+                      État des services
+                    </h2>
+                    <UButton
+                      label="Vérifier"
+                      icon="i-lucide-activity"
+                      size="xs"
+                      color="neutral"
+                      variant="ghost"
+                      :loading="checking"
+                      data-testid="check-services"
+                      @click="checkServices"
+                    />
+                  </div>
                 </template>
                 <ul class="flex flex-col gap-4" data-testid="services">
                   <li v-for="service in data.health.services" :key="service.id" class="flex flex-col gap-1.5">
@@ -402,6 +438,20 @@ function serviceMetric(service: NonNullable<Dashboard['health']['services']>[num
                     <p class="truncate text-xs text-muted" :title="service.detail">
                       {{ service.detail }}
                     </p>
+                    <p v-if="service.check?.failingSince && service.status === 'down'" class="text-xs text-error">
+                      En échec depuis {{ timeAgo(service.check.failingSince, now) }}
+                    </p>
+                    <ul v-if="service.items?.length" class="ms-4 flex flex-col gap-1" data-testid="mailbox-health">
+                      <li v-for="mailbox in service.items" :key="mailbox.id" class="flex items-start gap-2 text-xs">
+                        <span class="mt-1 size-1.5 shrink-0 rounded-full" :class="HEALTH[mailbox.status].dot" />
+                        <span class="min-w-0">
+                          <NuxtLink to="/mailboxes" class="font-medium text-default hover:underline">{{ mailbox.name }}</NuxtLink>
+                          <span class="block truncate text-muted" :title="[checkLabel(mailbox.smtp, 'Envoi'), mailbox.imap ? checkLabel(mailbox.imap, 'IMAP') : ''].join(' · ')">
+                            {{ checkLabel(mailbox.smtp, 'Envoi') }}<template v-if="mailbox.imap"> · {{ checkLabel(mailbox.imap, 'IMAP') }}</template>
+                          </span>
+                        </span>
+                      </li>
+                    </ul>
                     <UProgress
                       v-if="service.usagePercent !== undefined && service.usagePercent !== null"
                       :model-value="service.usagePercent"

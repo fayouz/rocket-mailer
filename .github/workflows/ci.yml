@@ -30,8 +30,15 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U app" --health-interval 5s --health-timeout 5s --health-retries 10
+      # Real SMTP + IMAP server for the sending mailbox tests (tests/Functional/MailboxTest.php).
+      greenmail:
+        image: greenmail/standalone:2.1.3
+        env:
+          GREENMAIL_OPTS: -Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=commercial:secret-pass@crm.example.org
+        ports: ['3025:3025', '3143:3143']
     env:
       APP_ENV: test
+      GREENMAIL_HOST: 127.0.0.1
       DATABASE_URL: postgresql://app:app@127.0.0.1:5432/app?serverVersion=16&charset=utf8
     steps:
       - uses: actions/checkout@v4
@@ -147,6 +154,11 @@ jobs:
             context: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tags are needed by git describe (version of the build).
+          fetch-depth: 0
+      - id: version
+        run: echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - if: env.PUBLISH == 'true'
         uses: docker/login-action@v3
@@ -169,6 +181,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           target: prod
+          build-args: APP_VERSION=${{ steps.version.outputs.version }}
           push: ${{ env.PUBLISH == 'true' }}
           load: ${{ env.PUBLISH != 'true' }}
           tags: ${{ env.PUBLISH == 'true' && steps.meta.outputs.tags || format('rocket-mailer-{0}:ci', matrix.component) }}
@@ -197,6 +210,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       COMPOSE: docker compose -f compose.yaml -f compose.demo.yaml
+      # Version written in the images (build argument).
+      APP_VERSION: v0.0.0-ci
     steps:
       - uses: actions/checkout@v4
       - name: Start the demo stack
@@ -217,6 +232,14 @@ jobs:
           TOKEN=$(curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"marie.martin@example.org","password":"password"}' | jq -r .token)
           curl -fsS http://localhost:3000/api/me -H "Authorization: Bearer $TOKEN" | jq -e '.roles | index("ROLE_ADMIN")'
+          # Version of the images, shown by the API and the interface; no one-click update without UPDATER_TOKEN
+          curl -fsS http://localhost:3000/api/system/version -H "Authorization: Bearer $TOKEN" | jq -e '.version == "0.0.0-ci"'
+          curl -fsS http://localhost:3000/api/system/update -H "Authorization: Bearer $TOKEN" | jq -e '.current.release == "0.0.0-ci" and .updater.configured == false'
+          curl -fsS http://localhost:3000/login | grep -q 'appVersion:"v0.0.0-ci"'
+          # LDAP settings (environment until saved): the connection test finds the directory's users
+          curl -fsS http://localhost:3000/api/ldap/config -H "Authorization: Bearer $TOKEN" | jq -e '.source == "environment" and .enabled'
+          curl -fsS -X POST http://localhost:3000/api/ldap/test -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
+            | jq -e '.ok and .count >= 2'
           # Third-party host: embed token minted server-side, composer frameable only from its origin
           APP_ID=$(curl -fsS http://localhost:4000/ | grep -o 'applicationId: "[^"]*"' | cut -d'"' -f2)
           curl -fsS "http://localhost:4000/token?user=alice%40example.org" | jq -e .token
@@ -225,9 +248,33 @@ jobs:
           # Documentation site, with the changelog
           curl -fsS http://localhost:3001/changelog | grep -q 'Dernière version'
           curl -fsS http://localhost:3001/embed/widget | grep -q '<title>Intégrer le widget'
+          # Network health checks (also run by the worker's scheduler): the real OpenLDAP and the CRM mailbox (Mailpit SMTP, GreenMail IMAP)
+          curl -fsS -X POST http://localhost:3000/api/health/check -H "Authorization: Bearer $TOKEN" \
+            | jq -e '[.services[] | select(.id == "ldap" or .id == "mailboxes") | .status] == ["operational", "operational"]'
+          docker compose -f compose.yaml -f compose.demo.yaml exec -T api php bin/console app:health:check
           # Dashboard: the whole platform and service details for admins
           curl -fsS http://localhost:3000/api/dashboard -H "Authorization: Bearer $TOKEN" \
             | jq -e '.scope == "platform" and (.daily | length) == 30 and ([.health.services[] | select(.id == "database" or .id == "ldap") | .status] == ["operational", "operational"])'
+          DEMO_TOKEN=rma_demo_rocket_mailer_do_not_use_in_production
+          # An application sends from its own sender, never from the platform's addresses
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/api/emails -H "Authorization: Bearer $DEMO_TOKEN" \
+            -H 'X-Impersonate-User: alice@example.org' -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d '{"to":["client@example.com"],"subject":"CI platform","htmlBody":"<p>no</p>","from":"no-reply@example.org"}')" = 422
+          curl -fsS -X POST http://localhost:3000/api/emails -H "Authorization: Bearer $DEMO_TOKEN" \
+            -H 'X-Impersonate-User: alice@example.org' -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d '{"to":["client@example.com"],"subject":"CI app sender","htmlBody":"<p>ok</p>"}' | jq -e '.from == "Démo CRM <contact@crm.example.org>"'
+          # Sending mailbox of Démo CRM (designated by its address): through Mailpit, copy in GreenMail's IMAP "Sent"
+          MAILBOX_EMAIL=$(curl -fsS -X POST http://localhost:3000/api/emails -H "Authorization: Bearer $DEMO_TOKEN" \
+            -H 'X-Impersonate-User: alice@example.org' -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d '{"to":["client@example.com"],"subject":"CI mailbox","htmlBody":"<p>ok</p>","from":"commercial@crm.example.org"}')
+          echo "$MAILBOX_EMAIL" | jq -e '.mailboxName == "Boîte commerciale du CRM"'
+          MAILBOX_EMAIL_ID=$(echo "$MAILBOX_EMAIL" | jq -r .id)
+          for i in $(seq 1 30); do
+            curl -fsS "http://localhost:3000/api/emails/$MAILBOX_EMAIL_ID" -H "Authorization: Bearer $DEMO_TOKEN" \
+              -H 'X-Impersonate-User: alice@example.org' -H 'Accept: application/json' | jq -e '.archivedIn == "Sent"' && break
+            [ "$i" = 30 ] && exit 1
+            sleep 2
+          done
           # Sending goes through the async worker and reaches Mailpit
           ALICE=$(curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -r .token)

@@ -118,7 +118,14 @@ const columns = computed<TableColumn<Email>[]>(() => [
   ...(props.scope === 'all'
     ? [{ id: 'sender', header: 'Expéditeur', cell: ({ row }: { row: { original: Email } }) => row.original.sender.displayName }]
     : []),
-  { id: 'from', header: 'De', cell: ({ row }) => row.original.from ?? row.original.sender.email },
+  {
+    id: 'from',
+    header: 'De',
+    cell: ({ row }) => h('span', { class: 'inline-flex items-center gap-1.5' }, [
+      row.original.mailboxName ? h(UIcon, { 'name': 'i-lucide-mailbox', 'class': 'size-4 text-muted', 'aria-label': `Boîte « ${row.original.mailboxName} »` }) : null,
+      row.original.from ?? row.original.sender.email,
+    ]),
+  },
   { accessorKey: 'to', header: 'Destinataires', cell: ({ row }) => row.original.to.join(', ') },
   {
     accessorKey: 'subject',
