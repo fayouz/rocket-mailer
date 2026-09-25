@@ -46,7 +46,7 @@ const columns: TableColumn<User>[] = [
   {
     accessorKey: 'source',
     header: 'Source',
-    cell: ({ row }) => h(UBadge, { variant: 'subtle', color: row.original.source === 'ldap' ? 'info' : 'neutral', label: row.original.source === 'ldap' ? 'LDAP' : 'Local' }),
+    cell: ({ row }) => h(UBadge, { variant: 'subtle', color: row.original.source === 'ldap' ? 'info' : 'neutral', label: row.original.source === 'ldap' ? (row.original.authenticationServerName ?? 'LDAP') : 'Local' }),
   },
   {
     id: 'admin',
@@ -60,11 +60,19 @@ const columns: TableColumn<User>[] = [
   {
     accessorKey: 'enabled',
     header: 'Actif',
-    cell: ({ row }) => h(USwitch, {
-      'modelValue': row.original.enabled,
-      'disabled': row.original.id === auth.me.value?.user?.id,
-      'onUpdate:modelValue': (value: boolean) => patch(row.original, { enabled: value }),
-    }),
+    cell: ({ row }) => h('div', { class: 'flex items-center gap-2' }, [
+      h(UBadge, {
+        variant: 'subtle',
+        color: row.original.enabled ? 'success' : 'neutral',
+        label: row.original.enabled ? 'Actif' : 'Désactivé',
+      }),
+      h(USwitch, {
+        'modelValue': row.original.enabled,
+        'disabled': row.original.id === auth.me.value?.user?.id,
+        'aria-label': row.original.enabled ? 'Désactiver' : 'Activer',
+        'onUpdate:modelValue': (value: boolean) => patch(row.original, { enabled: value }),
+      }),
+    ]),
   },
   { accessorKey: 'ldapSyncedAt', header: 'Synchro LDAP', cell: ({ row }) => formatDate(row.original.ldapSyncedAt) },
   {

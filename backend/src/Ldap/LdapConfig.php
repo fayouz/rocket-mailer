@@ -3,7 +3,7 @@
 namespace App\Ldap;
 
 /**
- * LDAP directory settings, as stored in the database (see LdapSettings).
+ * LDAP directory settings, mapped from the AuthenticationServer entity (see LdapSettings).
  */
 final readonly class LdapConfig
 {

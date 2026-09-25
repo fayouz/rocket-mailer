@@ -2,24 +2,29 @@
 
 namespace App\Ldap;
 
-use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use App\Authentication\AuthenticationConnectorInterface;
+use App\Enum\AuthenticationServerType;
 use Symfony\Component\Ldap\Entry;
 use Symfony\Component\Ldap\Exception\InvalidCredentialsException;
 use Symfony\Component\Ldap\Ldap;
 use Symfony\Component\Ldap\LdapInterface;
 
 /**
- * The LDAP directory, configured in the database (LdapSettings): read at each use, so a change in the
+ * The LDAP directory, configured in AuthenticationServer (LdapSettings): read at each use, so a change in the
  * administration applies at once.
  */
-#[AsAlias(UserDirectoryInterface::class)]
-final class LdapDirectory implements UserDirectoryInterface
+final class LdapDirectory implements AuthenticationConnectorInterface
 {
     /** Seconds allowed to the health check (connection and search). */
     private const PING_TIMEOUT = 5;
 
     public function __construct(private readonly LdapSettings $settings)
     {
+    }
+
+    public function supports(AuthenticationServerType $type): bool
+    {
+        return AuthenticationServerType::Ldap === $type;
     }
 
     public function isEnabled(): bool
