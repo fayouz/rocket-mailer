@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Entity\Application;
+use App\Entity\ColorPalette;
 use App\Entity\EmailLayout;
 use App\Entity\EmailTemplate;
 use App\Entity\Mailbox;
@@ -11,6 +12,7 @@ use App\Repository\EmailLayoutRepository;
 use App\Repository\MailboxRepository;
 use App\Entity\User;
 use App\Repository\ApplicationRepository;
+use App\Repository\ColorPaletteRepository;
 use App\Repository\EmailTemplateRepository;
 use App\Repository\UserRepository;
 use App\Security\Roles;
@@ -49,6 +51,7 @@ final class DemoSeedCommand
         private readonly SecretBox $secrets,
         #[Autowire(env: 'DEMO_MAILBOX_SMTP')] private readonly string $demoMailboxSmtp,
         #[Autowire(env: 'DEMO_MAILBOX_IMAP')] private readonly string $demoMailboxImap,
+        private readonly ColorPaletteRepository $palettes,
     ) {
     }
 
@@ -84,6 +87,11 @@ final class DemoSeedCommand
             ->setSenderName('Démo CRM')
             ->setEnabled(true);
         $application->useToken($this->demoAppToken);
+        // Its embedded composer matches the Demo CRM's indigo header; Rocket Mailer keeps its default colors.
+        $palette = $this->palettes->findOneBy(['name' => 'Démo CRM']) ?? (new ColorPalette())->setName('Démo CRM');
+        $palette->setPrimary('#4338ca')->setNeutral('slate');
+        $this->em->persist($palette);
+        $application->setPalette($palette);
         $this->em->persist($application);
 
         // Sending mailbox of the CRM: SMTP through Mailpit (to see the emails), copy in GreenMail's IMAP "Sent" folder.

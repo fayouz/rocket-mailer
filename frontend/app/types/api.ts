@@ -41,6 +41,8 @@ export interface Application extends Tracked {
   /** Its own sender, required to send (never the platform's addresses). */
   senderEmail: string | null
   senderName: string | null
+  /** Colors of its embedded composer; null: the project's palette. */
+  palette: { '@id': string, id: string, name: string } | null
   enabled: boolean
   lastUsedAt: string | null
 }
@@ -143,6 +145,21 @@ export interface SenderAddress extends Tracked {
 export interface Settings {
   personalFromAllowed: boolean
   installDefaultFrom?: string
+  /** The project's palette (Rocket Mailer, and default of the applications); null: default colors. */
+  palette: import('~/utils/palette').ThemePalette | null
+}
+
+/** A color palette: "#rrggbb" per semantic color (null: default), and the tone of the grays. */
+export interface ColorPalette extends Tracked {
+  id: string
+  name: string
+  primary: string
+  secondary: string | null
+  success: string | null
+  info: string | null
+  warning: string | null
+  error: string | null
+  neutral: import('~/utils/palette').Neutral
 }
 
 export interface Attachment {

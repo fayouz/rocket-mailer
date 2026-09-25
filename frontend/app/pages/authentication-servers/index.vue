@@ -122,12 +122,6 @@ async function saveWizard() {
   }
 }
 
-function create() {
-  editing.value = null
-  Object.assign(form, { name: '', type: 'ldap', enabled: false, url: 'ldap://' })
-  formOpen.value = true
-}
-
 function edit(server: AuthenticationServer) {
   editing.value = server
   Object.assign(form, { name: server.name, type: server.type, enabled: server.enabled, url: server.url })
