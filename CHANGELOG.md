@@ -70,6 +70,13 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Modifié
 
+- **Rocket Mailer s'appuie sur [rocket-core](https://github.com/fayouz/rocket-core)**, le socle commun des applications Rocket (bundle Symfony `rocket/core-bundle`, layer Nuxt `@rocket/core`) : configuration initiale, comptes locaux, LDAP et SSO, serveurs d'authentification, applications externes, tableau de bord, état des services, mises à jour et démo. Le dépôt ne garde que le métier de Rocket Mailer. Conséquences :
+  - **mode suite** : avec `ROCKET_AUTH_URL` (et `ROCKET_AUTH_*`), la connexion passe par Rocket Auth, qui gère les comptes, les groupes et l'annuaire ; sans, Rocket Mailer reste autonome. Voir *Installation → Autonome ou dans la suite Rocket* ;
+  - les **réglages d'expédition des applications** (expéditeur, adresses qu'elles peuvent imposer) ont leur propre ressource d'API, `GET`/`PATCH /api/application_senders/{id}` (et `GET /api/application_senders`) ; `senderEmail`, `senderName` et `allowedSenders` ne font plus partie de `/api/applications`. La page Applications les enregistre dans le même formulaire, et la migration reprend ceux déjà saisis ;
+  - le mot de passe du compte de service LDAP et les secrets des fournisseurs OpenID Connect sont chiffrés avec la nouvelle clé `SECRETS_ENCRYPTION_KEY` (vide : dérivée de `APP_SECRET`) ; la migration les chiffre à nouveau. `MAILBOX_ENCRYPTION_KEY` chiffre toujours les mots de passe des boîtes d'envoi : gardez-la ;
+  - tableau de bord : indicateur **Templates disponibles**, graphique d'activité par jour (envoyés, échecs, en file), utilisateurs SSO ; le **relais SMTP** est contacté par le worker toutes les 5 minutes (désactivé avec `MAILER_DSN=null://null`) et chaque boîte d'envoi a une vérification pour l'envoi et une pour la copie IMAP ; la file surveille toutes les tâches de fond ;
+  - le composeur embarqué utilise le protocole commun des pages embarquées (`useEmbedBridge`) : rien ne change pour `embed.js`, le web component et les clients d'intégration ;
+  - la session de l'interface est propre à Rocket Mailer : reconnectez-vous une fois après la mise à jour.
 - Le worker consomme aussi les tâches planifiées : `messenger:consume async scheduler_default` (à reprendre dans un service systemd ou supervisord existant).
 - Le tableau de bord occupe toute la largeur de l'écran.
 

@@ -9,6 +9,8 @@ Envoi d'emails en texte enrichi, templates d'email visuels, et composeur embarqu
 | `integrations/` | Clients pour les applications appelantes : layer Nuxt (`integrations/nuxt`) et bundle Symfony (`integrations/symfony`), publiés dans des dépôts miroirs par `.github/workflows/split.yml` |
 | `docs/` | Site de documentation (Nuxt UI + Nuxt Content), avec le changelog sur `/changelog` : `cd docs && npm install && npm run dev`, puis http://localhost:3001 |
 
+Le socle commun (comptes, LDAP, SSO, applications, tableau de bord, mises à jour, modes autonome et suite) vient de **[rocket-core](https://github.com/fayouz/rocket-core)** : le bundle Symfony `rocket/core-bundle` (Composer) et le layer Nuxt `@rocket/core` (npm). Rocket Mailer n'y ajoute que son métier : envois, templates, layouts, boîtes d'envoi, adresses d'expédition, pièces jointes et composeur embarqué. Pour travailler sur les deux à la fois : `ROCKET_CORE_LAYER=../../rocket-core/nuxt npm run dev` côté front, et un dépôt `path` Composer côté backend.
+
 ## Démarrage rapide
 
 ```bash
@@ -43,15 +45,16 @@ cd frontend && npm install && npm run dev            # NUXT_PUBLIC_API_BASE=http
 ## Fonctionnalités
 
 ### Tableau de bord et suivi des envois
-- **Tableau de bord** (page d'accueil) : envois et délivrabilité sur 30 jours, file d'envoi, intégrations, activité récente, état des services (base, file, SMTP, LDAP, stockage). Un utilisateur y voit ses propres chiffres ; un administrateur, toute la plateforme. API : `GET /api/dashboard`.
+- **Tableau de bord** (page d'accueil) : envois et délivrabilité sur 30 jours, file d'envoi, templates, intégrations, activité récente, état des services (base, tâches de fond, LDAP, SSO, boîtes d'envoi, relais SMTP, stockage). Un utilisateur y voit ses propres chiffres ; un administrateur, toute la plateforme. API : `GET /api/dashboard`.
 - **Mes envois** et **Tous les envois** (admin) : recherche dans l'objet et les destinataires, filtres par statut, application, expéditeur et période, pagination. Les mêmes filtres existent dans l'API (`GET /api/emails?q=…&status=…`).
 
 ### Utilisateurs, LDAP et authentification unique
 - Comptes **locaux** (mot de passe haché), **LDAP** (authentification par bind sur l'annuaire) ou **SSO** : connexion via un fournisseur **OpenID Connect** comme [Rocket Auth](https://github.com/fayouz/rocket-auth) (Administration → Serveurs d'authentification). Voir `docs/content/5.administration/8.sso.md`.
+- **Autonome ou dans la suite Rocket** : avec `ROCKET_AUTH_URL`, la connexion passe par Rocket Auth, qui gère les comptes, les groupes et l'annuaire (voir `docs/content/1.getting-started/2.installation.md`).
 - Synchronisation : `php bin/console app:ldap:sync [--dry-run]` (à planifier en cron) ou bouton « Synchroniser LDAP » (admin).
   Elle crée et met à jour les comptes et désactive ceux qui ont disparu de l'annuaire. Elle ne prend jamais le contrôle d'un compte local portant le même email.
 - `LDAP_ADMIN_GROUP_DN` : les membres de ce groupe (attribut `memberOf`) reçoivent `ROLE_ADMIN`. Vide : les admins sont gérés dans l'application.
-- Configuration dans **Administration → Annuaire LDAP** (stockée en base, mot de passe chiffré, bouton **Tester**). Les variables `LDAP_ENABLED`, `LDAP_URL`, `LDAP_START_TLS`, `LDAP_BASE_DN`, `LDAP_SEARCH_DN`, `LDAP_SEARCH_PASSWORD`, `LDAP_USER_FILTER`, `LDAP_ADMIN_GROUP_DN` et `LDAP_ATTRIBUTE_*` en sont la configuration par défaut.
+- Configuration dans **Administration → Annuaire LDAP** (stockée en base, mot de passe chiffré avec `SECRETS_ENCRYPTION_KEY`, bouton **Tester**). Les variables `LDAP_ENABLED`, `LDAP_URL`, `LDAP_START_TLS`, `LDAP_BASE_DN`, `LDAP_SEARCH_DN`, `LDAP_SEARCH_PASSWORD`, `LDAP_USER_FILTER`, `LDAP_ADMIN_GROUP_DN` et `LDAP_ATTRIBUTE_*` en sont la configuration par défaut.
 
 ### Applications externes et impersonation
 Un administrateur crée une application. Son jeton secret (`rma_…`) n'est affiché qu'une seule fois, et seul son hash SHA-256 est stocké.
@@ -101,6 +104,7 @@ Sécurité du composeur embarqué :
 ### Adresse d'expédition (« De »)
 - Le composeur a une liste **De**. Elle propose les adresses d'expédition des **Réglages** (l'adresse par défaut est présélectionnée) et l'adresse de l'utilisateur, sauf si les Réglages l'interdisent.
 - À l'installation, `MAILER_DEFAULT_FROM="Nom <adresse>"` crée l'adresse par défaut. On la gère ensuite dans les Réglages.
+- Une application n'envoie jamais depuis ces adresses : elle a son propre **expéditeur** (réglages d'expédition de l'application, `GET`/`PATCH /api/application_senders/{id}`, administrateurs).
 - Une application peut imposer l'adresse à la volée, avec `setDraft({ from })` ou le champ `from` de l'API, dans la limite de ses **adresses d'expédition autorisées** (`contact@…` ou `*@domaine`). Toute autre adresse est refusée. Les réponses reviennent à l'utilisateur (`Reply-To`).
 
 ### Version et mises à jour
