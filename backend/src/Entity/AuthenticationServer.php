@@ -19,6 +19,7 @@ use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: AuthenticationServerRepository::class)]
+#[ORM\Index(name: 'idx_authentication_server_type', columns: ['type'])]
 #[ApiResource(
     operations: [new GetCollection(), new Get(), new Post(), new Patch(), new Delete(processor: AuthenticationServerDeleteProcessor::class)],
     normalizationContext: ['groups' => ['authentication_server:read', 'tracking']],
