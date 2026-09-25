@@ -86,7 +86,7 @@ services:
     environment:
       NUXT_PUBLIC_API_BASE: ""
       NUXT_PUBLIC_DOCS_URL: ${DEMO_DOCS_URL:-http://localhost:3001}
-      NUXT_PUBLIC_CHANGELOG_URL: ${DEMO_DOCS_URL:-http://localhost:3001}/changelog
+      NUXT_PUBLIC_CHANGELOG_URL: ${DEMO_CHANGELOG_URL:-${DEMO_DOCS_URL:-http://localhost:3001}/changelog}
 
   # Documentation site, with the changelog (/changelog).
   docs:
