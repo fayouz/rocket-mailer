@@ -6,6 +6,11 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Santé des boîtes d'envoi et de l'annuaire LDAP** sur le tableau de bord :
+  - le worker vérifie toutes les 5 minutes (Symfony Scheduler) chaque boîte active (connexion et authentification SMTP, IMAP si la copie est activée) et le serveur LDAP (authentification du compte de service, lecture de la base) ;
+  - le tableau de bord affiche l'état de chaque boîte, l'erreur éventuelle et depuis quand un service est en échec ; bouton **Vérifier** pour relancer tout de suite ;
+  - commande `app:health:check` (code de sortie 1 en cas d'échec, pour une supervision) ; API `POST /api/health/check`.
+
 - **Version et mises à jour** :
   - la version installée s'affiche en bas du menu ; les administrateurs voient un badge **Nouveau** quand une version plus récente est publiée ;
   - page Administration → **Mises à jour** : version installée, dernière version publiée sur GitHub avec ses notes, et bouton **Mettre à jour** ;
@@ -55,6 +60,11 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 - La démo (et Codespaces) lance aussi le site de documentation et le changelog, sur le port 3001.
 - Sur Rocket Mailer, `/docs` et `/changelog` redirigent vers la documentation et le changelog. Le tableau de bord a un raccourci « Nouveautés ».
+
+### Modifié
+
+- Le worker consomme aussi les tâches planifiées : `messenger:consume async scheduler_default` (à reprendre dans un service systemd ou supervisord existant).
+- Le tableau de bord occupe toute la largeur de l'écran.
 
 ### Corrigé
 

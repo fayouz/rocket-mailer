@@ -141,7 +141,7 @@ Toutes les entités sont **Timestampable** et **Blameable** (`createdAt`, `updat
 
   Les tags d'image suivent le nom de branche, le semver, le sha court, et `latest` pour `main`.
 
-Le worker utilise l'image API avec `php bin/console messenger:consume async`.
+Le worker utilise l'image API avec `php bin/console messenger:consume async scheduler_default` (envois, et tâches planifiées comme les vérifications de santé).
 
 ## Gitflow
 

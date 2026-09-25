@@ -78,7 +78,7 @@ final class DashboardTest extends WebTestCase
         self::assertContains('application.created', array_column($stats['activity'], 'type'));
 
         $services = array_column($stats['health']['services'], null, 'id');
-        self::assertSame(['database', 'queue', 'mailer', 'ldap', 'storage'], array_keys($services));
+        self::assertSame(['database', 'queue', 'mailer', 'mailboxes', 'ldap', 'storage'], array_keys($services));
         self::assertSame('operational', $services['database']['status']);
         // MAILER_DSN=null://null in tests: nothing is actually delivered.
         self::assertSame('degraded', $services['mailer']['status']);

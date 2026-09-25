@@ -189,10 +189,31 @@ export interface EmailDraft {
   variables?: Record<string, unknown>
 }
 
-export type ServiceStatus = 'operational' | 'degraded' | 'down' | 'disabled'
+/** unknown: network check not run yet (LDAP, mailboxes: every 5 minutes). */
+export type ServiceStatus = 'operational' | 'degraded' | 'down' | 'disabled' | 'unknown'
+
+/** Last result of a background network check. */
+export interface ServiceCheckResult {
+  status: 'operational' | 'down' | 'unknown'
+  detail?: string
+  latencyMs?: number | null
+  checkedAt?: string
+  lastOkAt?: string | null
+  failingSince?: string | null
+}
+
+export interface MailboxHealth {
+  id: string
+  name: string
+  email: string
+  status: 'operational' | 'down' | 'unknown'
+  smtp: ServiceCheckResult | null
+  /** null: no IMAP copy for this mailbox. */
+  imap: ServiceCheckResult | null
+}
 
 export interface ServiceHealth {
-  id: 'database' | 'queue' | 'mailer' | 'ldap' | 'storage'
+  id: 'database' | 'queue' | 'mailer' | 'mailboxes' | 'ldap' | 'storage'
   label: string
   status: ServiceStatus
   detail: string
@@ -203,6 +224,12 @@ export interface ServiceHealth {
   lastSyncAt?: string | null
   usagePercent?: number | null
   freeBytes?: number | null
+  /** ldap: last network check. */
+  check?: ServiceCheckResult | null
+  /** mailboxes */
+  total?: number
+  failing?: number
+  items?: MailboxHealth[]
 }
 
 export interface DashboardActivity {
@@ -252,7 +279,7 @@ export interface Dashboard {
     applicationName: string | null
   }[]
   activity: DashboardActivity[]
-  health: { status: Exclude<ServiceStatus, 'disabled'>, services?: ServiceHealth[] }
+  health: { status: Exclude<ServiceStatus, 'disabled' | 'unknown'>, services?: ServiceHealth[] }
   users?: { total: number, enabled: number, ldap: number, local: number }
   applications?: DashboardApplication[]
 }

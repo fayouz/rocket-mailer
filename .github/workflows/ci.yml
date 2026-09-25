@@ -248,6 +248,10 @@ jobs:
           # Documentation site, with the changelog
           curl -fsS http://localhost:3001/changelog | grep -q 'Dernière version'
           curl -fsS http://localhost:3001/embed/widget | grep -q '<title>Intégrer le widget'
+          # Network health checks (also run by the worker's scheduler): the real OpenLDAP and the CRM mailbox (Mailpit SMTP, GreenMail IMAP)
+          curl -fsS -X POST http://localhost:3000/api/health/check -H "Authorization: Bearer $TOKEN" \
+            | jq -e '[.services[] | select(.id == "ldap" or .id == "mailboxes") | .status] == ["operational", "operational"]'
+          docker compose -f compose.yaml -f compose.demo.yaml exec -T api php bin/console app:health:check
           # Dashboard: the whole platform and service details for admins
           curl -fsS http://localhost:3000/api/dashboard -H "Authorization: Bearer $TOKEN" \
             | jq -e '.scope == "platform" and (.daily | length) == 30 and ([.health.services[] | select(.id == "database" or .id == "ldap") | .status] == ["operational", "operational"])'

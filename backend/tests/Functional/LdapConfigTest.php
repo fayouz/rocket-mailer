@@ -116,6 +116,10 @@ final class LdapConfigTest extends WebTestCase
 
                 return ['count' => 12, 'sample' => [new DirectoryUser('uid=jean,ou=people,dc=example,dc=org', 'jean@example.org', 'Jean', 'Dupont', false)]];
             }
+
+            public function ping(LdapConfig $config): void
+            {
+            }
         };
         static::getContainer()->set(UserDirectoryInterface::class, $directory);
 

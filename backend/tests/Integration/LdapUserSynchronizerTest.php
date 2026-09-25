@@ -43,6 +43,10 @@ final class LdapUserSynchronizerTest extends KernelTestCase
             {
                 return ['count' => \count($this->entries), 'sample' => \array_slice($this->entries, 0, $limit)];
             }
+
+            public function ping(\App\Ldap\LdapConfig $config): void
+            {
+            }
         };
 
         $container = static::getContainer();

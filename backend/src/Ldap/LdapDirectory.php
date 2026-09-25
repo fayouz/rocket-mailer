@@ -15,6 +15,9 @@ use Symfony\Component\Ldap\LdapInterface;
 #[AsAlias(UserDirectoryInterface::class)]
 final class LdapDirectory implements UserDirectoryInterface
 {
+    /** Seconds allowed to the health check (connection and search). */
+    private const PING_TIMEOUT = 5;
+
     public function __construct(private readonly LdapSettings $settings)
     {
     }
@@ -65,6 +68,13 @@ final class LdapDirectory implements UserDirectoryInterface
         return ['count' => $count, 'sample' => $sample];
     }
 
+    public function ping(LdapConfig $config): void
+    {
+        $ldap = $this->connect($config, networkTimeout: self::PING_TIMEOUT);
+        $ldap->bind('' === $config->bindDn ? null : $config->bindDn, '' === $config->bindPassword ? null : $config->bindPassword);
+        $ldap->query($config->baseDn, '(objectClass=*)', ['scope' => 'base', 'sizeLimit' => 1, 'timeout' => self::PING_TIMEOUT])->execute()->count();
+    }
+
     /** @return iterable<DirectoryUser> */
     private function search(LdapConfig $config): iterable
     {
@@ -95,9 +105,12 @@ final class LdapDirectory implements UserDirectoryInterface
         }
     }
 
-    private function connect(LdapConfig $config): LdapInterface
+    private function connect(LdapConfig $config, ?int $networkTimeout = null): LdapInterface
     {
         $options = ['connection_string' => $config->url];
+        if (null !== $networkTimeout) {
+            $options['options'] = ['network_timeout' => $networkTimeout];
+        }
         if ($config->startTls) {
             $options['encryption'] = 'tls';
         }
