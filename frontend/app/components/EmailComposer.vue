@@ -12,7 +12,7 @@ const api = useApi()
 const toast = useToast()
 
 function emptyDraft(): EmailDraft {
-  return { from: null, to: [], cc: [], bcc: [], subject: '', htmlBody: '', template: null, attachments: [], ...props.initial }
+  return { from: null, mailbox: null, to: [], cc: [], bcc: [], subject: '', htmlBody: '', template: null, attachments: [], ...props.initial }
 }
 
 const draft = reactive<EmailDraft>(emptyDraft())
@@ -60,35 +60,77 @@ function applyTypedValues() {
 }
 const uploading = ref(false)
 
-// "From" choices: the settings' addresses, the user's own address, and any address imposed by the host application.
+// "From" choices: the settings' addresses, the user's own address, any address imposed by the host application,
+// then the sending mailboxes (of the application, or shared with every user).
 const senders = ref<SenderOption[]>([])
 const sourceLabels: Record<SenderOption['source'], string> = {
   settings: 'Adresse de l’organisation',
   personal: 'Votre adresse',
-  application: 'Imposée par l’application',
+  application: 'Adresse de l’application',
+  mailbox: 'Boîte d’envoi',
 }
-const senderItems = computed(() => senders.value.map(option => ({
-  label: option.from,
-  value: option.from,
-  description: sourceLabels[option.source],
-})))
+const optionKey = (option: SenderOption) => (option.mailbox ? `mailbox:${option.mailbox}` : option.from)
+const mailboxIri = (reference: string) => (reference.startsWith('/api/') ? reference : `/api/mailboxes/${reference}`)
+
+const senderItems = computed(() => {
+  const toItem = (option: SenderOption) => ({
+    label: option.from,
+    value: optionKey(option),
+    description: option.mailboxName ? `${sourceLabels.mailbox} · ${option.mailboxName}` : sourceLabels[option.source],
+    icon: option.mailbox ? 'i-lucide-mailbox' : 'i-lucide-at-sign',
+  })
+  const addresses = senders.value.filter(o => !o.mailbox).map(toItem)
+  const mailboxes = senders.value.filter(o => o.mailbox).map(toItem)
+  if (!mailboxes.length) return addresses
+  return [
+    [{ type: 'label' as const, label: 'Adresses d’envoi' }, ...addresses],
+    [{ type: 'label' as const, label: 'Boîtes d’envoi' }, ...mailboxes],
+  ]
+})
+
+/** Selected option: an address ("from") or a mailbox. */
+const fromKey = computed(() => (draft.mailbox ? `mailbox:${mailboxIri(draft.mailbox)}` : draft.from) ?? undefined)
+function selectKey(key: string) {
+  const option = senders.value.find(o => optionKey(o) === key)
+  draft.mailbox = option?.mailbox ?? null
+  draft.from = option?.mailbox ? null : (option?.from ?? key)
+}
 
 function selectFrom(from: string | null | undefined) {
   if (!from) {
-    draft.from = senders.value.find(option => option.default)?.from ?? null
+    if (!draft.mailbox) draft.from = senders.value.find(option => option.default)?.from ?? null
+    return
+  }
+  // An address that is one of the offered mailboxes selects the mailbox.
+  const email = from.match(/<([^>]+)>/)?.[1] ?? from
+  const mailbox = senders.value.find(o => o.mailbox && o.email === email.trim().toLowerCase())
+  if (mailbox) {
+    selectKey(optionKey(mailbox))
     return
   }
   if (!senders.value.some(option => option.from === from)) {
     senders.value = [...senders.value, { from, email: from, name: null, default: false, source: 'application' }]
   }
+  draft.mailbox = null
   draft.from = from
 }
+
+function selectMailbox(reference: string) {
+  const option = senders.value.find(o => o.mailbox === mailboxIri(reference))
+  if (option) selectKey(optionKey(option))
+  else toast.add({ title: 'Boîte d’envoi indisponible', description: 'Elle n’est pas rattachée à cette application.', color: 'warning' })
+}
+
+const sendersLoaded = ref(false)
 
 async function loadSenders() {
   try {
     const imposed = senders.value.filter(option => option.source === 'application')
-    senders.value = [...await api<SenderOption[]>('/api/senders'), ...imposed]
-    selectFrom(draft.from)
+    const offered = await api<SenderOption[]>('/api/senders')
+    senders.value = [...offered, ...imposed.filter(option => !offered.some(o => o.from === option.from))]
+    sendersLoaded.value = true
+    if (draft.mailbox) selectMailbox(draft.mailbox)
+    else selectFrom(draft.from)
   }
   catch (error) {
     toast.add({ title: 'Adresses d’expédition indisponibles', description: apiErrorMessage(error), color: 'warning' })
@@ -97,7 +139,10 @@ async function loadSenders() {
 
 onMounted(loadSenders)
 
-const canSend = computed(() => draft.to.length > 0 && draft.subject.trim() !== '' && draft.htmlBody.trim() !== '' && !sending.value && !uploading.value)
+/** Through an application with no sender configured (and no mailbox): nothing can be sent. */
+const noSender = computed(() => sendersLoaded.value && senders.value.length === 0)
+
+const canSend = computed(() => !noSender.value && draft.to.length > 0 && draft.subject.trim() !== '' && draft.htmlBody.trim() !== '' && !sending.value && !uploading.value)
 
 function keepValidAddresses(field: 'to' | 'cc' | 'bcc') {
   const invalid = draft[field].filter(address => !isEmail(address))
@@ -116,7 +161,8 @@ function onTemplatePicked(template: EmailTemplate) {
 }
 
 function applyTemplate(template: EmailTemplate) {
-  draft.htmlBody = template.html
+  // The content in its layout, as computed by the API.
+  draft.htmlBody = template.renderedHtml ?? template.html
   draft.template = `/api/email_templates/${template.id}`
   templateName.value = template.name
   if (!draft.subject.trim() && template.defaultSubject) draft.subject = template.defaultSubject
@@ -143,8 +189,9 @@ async function loadTemplate(reference: string) {
 }
 
 function applyDraft(incoming: Partial<EmailDraft>) {
-  const { attachments: attachmentIds, from, variables, template, ...fields } = incoming
-  if (from !== undefined) selectFrom(from)
+  const { attachments: attachmentIds, from, mailbox, variables, template, ...fields } = incoming
+  if (typeof mailbox === 'string' && mailbox) selectMailbox(mailbox)
+  else if (from !== undefined) selectFrom(from)
   if (variables && typeof variables === 'object') {
     variableValues.value = { ...variableValues.value, ...flattenVariables(variables) }
   }
@@ -192,9 +239,9 @@ async function send() {
     })
     toast.add({ title: 'Message envoyé', description: email.subject, color: 'success', icon: 'i-lucide-check' })
     emit('sent', email)
-    const from = draft.from
+    const { from, mailbox } = draft
     Object.assign(draft, emptyDraft())
-    draft.from = from
+    Object.assign(draft, { from, mailbox })
     attachments.value = []
     templateName.value = null
     templateVariables.value = []
@@ -213,7 +260,8 @@ async function send() {
 const embedOpen = ref(false)
 const embedDraft = computed<EmbedDraft>(() => ({
   // The default sender is preselected anyway: only an explicit choice is worth passing.
-  from: draft.from !== senders.value.find(option => option.default)?.from ? draft.from : null,
+  from: !draft.mailbox && draft.from !== senders.value.find(option => option.default)?.from ? draft.from : null,
+  mailbox: draft.mailbox ? draft.mailbox.split('/').pop() : null,
   to: draft.to,
   cc: draft.cc,
   bcc: draft.bcc,
@@ -229,15 +277,24 @@ defineExpose({ applyDraft })
 
 <template>
   <form class="flex flex-col gap-4" @submit.prevent="send">
-    <UFormField label="De" required>
+    <UAlert
+      v-if="noSender"
+      color="error"
+      variant="subtle"
+      icon="i-lucide-mail-x"
+      title="Aucune adresse d’expédition"
+      description="Cette application n’a pas d’expéditeur configuré. Un administrateur de Rocket Mailer doit le définir (Administration → Applications)."
+      data-testid="no-sender"
+    />
+    <UFormField v-else label="De" required>
       <USelect
-        :model-value="draft.from ?? undefined"
+        :model-value="fromKey"
         :items="senderItems"
-        :loading="!senders.length"
+        :loading="!sendersLoaded"
         placeholder="Adresse d’expédition"
         class="w-full"
         data-testid="from-select"
-        @update:model-value="(value: string) => (draft.from = value)"
+        @update:model-value="(value: string) => selectKey(value)"
       />
     </UFormField>
 

@@ -94,6 +94,24 @@
     "stof/doctrine-extensions-bundle": {
         "version": "v1.15.3"
     },
+    "symfony/amazon-mailer": {
+        "version": "8.1",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "4.4",
+            "ref": "9648db3ecae5c8a6b1a5f74715d3907124348815"
+        }
+    },
+    "symfony/brevo-mailer": {
+        "version": "8.1",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "6.4",
+            "ref": "7c1038ceb733175f610a913a885a7c8b552b703a"
+        }
+    },
     "symfony/console": {
         "version": "8.1",
         "recipe": {
@@ -165,6 +183,24 @@
             "config/packages/mailer.yaml"
         ]
     },
+    "symfony/mailgun-mailer": {
+        "version": "8.1",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "4.4",
+            "ref": "808e7052971863a6b94df61807f41a71d480885b"
+        }
+    },
+    "symfony/mailjet-mailer": {
+        "version": "8.1",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "5.2",
+            "ref": "037c3256baa3334fd4cc3092a63209ae523696ff"
+        }
+    },
     "symfony/maker-bundle": {
         "version": "1.68",
         "recipe": {
@@ -198,6 +234,15 @@
             "config/packages/monolog.yaml"
         ]
     },
+    "symfony/postmark-mailer": {
+        "version": "8.1",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "4.4",
+            "ref": "a5924b4e3d78962df013d8434f463c090594ae79"
+        }
+    },
     "symfony/property-info": {
         "version": "8.1",
         "recipe": {
@@ -223,6 +268,18 @@
             "config/routes.yaml"
         ]
     },
+    "symfony/scheduler": {
+        "version": "8.1",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "7.2",
+            "ref": "caea3c928ee9e1b21288fd76aef36f16ea355515"
+        },
+        "files": [
+            "src/Schedule.php"
+        ]
+    },
     "symfony/security-bundle": {
         "version": "8.1",
         "recipe": {
@@ -235,6 +292,15 @@
             "config/packages/security.yaml",
             "config/routes/security.yaml"
         ]
+    },
+    "symfony/sendgrid-mailer": {
+        "version": "8.1",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "4.4",
+            "ref": "1caff9467bfc5c7f68503aa9eba9dc762a30ae21"
+        }
     },
     "symfony/twig-bundle": {
         "version": "8.1",

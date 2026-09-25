@@ -51,7 +51,7 @@ cd frontend && npm install && npm run dev            # NUXT_PUBLIC_API_BASE=http
 - Synchronisation : `php bin/console app:ldap:sync [--dry-run]` (à planifier en cron) ou bouton « Synchroniser LDAP » (admin).
   Elle crée et met à jour les comptes et désactive ceux qui ont disparu de l'annuaire. Elle ne prend jamais le contrôle d'un compte local portant le même email.
 - `LDAP_ADMIN_GROUP_DN` : les membres de ce groupe (attribut `memberOf`) reçoivent `ROLE_ADMIN`. Vide : les admins sont gérés dans l'application.
-- Variables : `LDAP_ENABLED`, `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_SEARCH_DN`, `LDAP_SEARCH_PASSWORD`, `LDAP_USER_FILTER`, `LDAP_ADMIN_GROUP_DN`.
+- Configuration dans **Administration → Annuaire LDAP** (stockée en base, mot de passe chiffré, bouton **Tester**). Les variables `LDAP_ENABLED`, `LDAP_URL`, `LDAP_START_TLS`, `LDAP_BASE_DN`, `LDAP_SEARCH_DN`, `LDAP_SEARCH_PASSWORD`, `LDAP_USER_FILTER`, `LDAP_ADMIN_GROUP_DN` et `LDAP_ATTRIBUTE_*` en sont la configuration par défaut.
 
 ### Applications externes et impersonation
 Un administrateur crée une application. Son jeton secret (`rma_…`) n'est affiché qu'une seule fois, et seul son hash SHA-256 est stocké.
@@ -103,6 +103,18 @@ Sécurité du composeur embarqué :
 - À l'installation, `MAILER_DEFAULT_FROM="Nom <adresse>"` crée l'adresse par défaut. On la gère ensuite dans les Réglages.
 - Une application peut imposer l'adresse à la volée, avec `setDraft({ from })` ou le champ `from` de l'API, dans la limite de ses **adresses d'expédition autorisées** (`contact@…` ou `*@domaine`). Toute autre adresse est refusée. Les réponses reviennent à l'utilisateur (`Reply-To`).
 
+### Version et mises à jour
+- Version affichée en bas du menu (`git describe --tags`, inscrite dans les images par la CI). Administration → **Mises à jour** la compare aux versions publiées sur GitHub (`UPDATE_REPOSITORY`).
+- Bouton **Mettre à jour**, avec trois méthodes au choix :
+  - **Docker** : service optionnel `updater` (Watchtower), `UPDATER_TOKEN=… docker compose --profile updater up -d`, avec les images ghcr.io (`API_IMAGE`, `FRONT_IMAGE`) ;
+  - **sans Docker** : cron `php bin/console app:update:run`, qui lance `deploy/update.sh` ;
+  - **manuelle**.
+
+### Boîtes d'envoi
+- Administration → **Boîtes d'envoi** : de vrais comptes email (SMTP, ou fournisseur par DSN : Brevo, SES, Mailjet, SendGrid, Postmark, Mailgun), avec copie de chaque email dans leur dossier « Envoyés » par IMAP.
+- Rattachées à des applications, elles apparaissent dans la liste « De » de leur composeur (ou pour tous les utilisateurs). API : `mailbox` dans `POST /api/emails` ; widget : `setDraft({ mailbox })`.
+- Mots de passe chiffrés en base avec `MAILBOX_ENCRYPTION_KEY` (vide : dérivée de `APP_SECRET`).
+
 ### Pièces jointes
 - Dans le composeur (application et widget), avec le bouton **Joindre des fichiers** ou par glisser-déposer : 10 fichiers, 10 Mo par fichier et 25 Mo par email par défaut. Les exécutables et scripts sont refusés.
 - Une application peut joindre un document qu'elle génère, par exemple un devis PDF. Son backend le téléverse au nom de l'utilisateur, puis la page le passe au widget avec `setDraft({ attachments: [id] })`.
@@ -113,6 +125,7 @@ Sécurité du composeur embarqué :
 - Import dans le composeur via « Importer un template » : le contenu arrive dans CKEditor, qui conserve le balisage d'email grâce à General HTML Support.
 - Templates privés ou partagés ; seul le propriétaire (ou un admin) les modifie.
 - **Variables** `{{ client.prenom }}` : insérées avec le bouton **{x}** de l'éditeur, avec un libellé et une valeur par défaut. Les valeurs viennent du composeur, de l'application qui l'embarque (`setDraft({ template, variables })`) ou de l'API (`POST /api/emails` avec `template` et `variables`).
+- **Layouts** (Administration → Layouts d'email) : enveloppe HTML commune avec l'emplacement `{{ content }}`, choisie par template ; le composeur et l'API utilisent le HTML final (`renderedHtml`).
 - **Versionnés** (Gedmo Loggable) : `GET /api/email_templates/{id}/versions` et `POST …/versions/{n}/restore`.
 
 ### Traçabilité
@@ -128,7 +141,7 @@ Toutes les entités sont **Timestampable** et **Blameable** (`createdAt`, `updat
 
   Les tags d'image suivent le nom de branche, le semver, le sha court, et `latest` pour `main`.
 
-Le worker utilise l'image API avec `php bin/console messenger:consume async`.
+Le worker utilise l'image API avec `php bin/console messenger:consume async scheduler_default` (envois, et tâches planifiées comme les vérifications de santé).
 
 ## Gitflow
 

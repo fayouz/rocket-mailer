@@ -10,15 +10,30 @@ x-demo-env: &demo-env
   LDAP_ENABLED: "1"
   LDAP_ADMIN_GROUP_DN: cn=mailer-admins,ou=groups,dc=example,dc=org
   CORS_ALLOW_ORIGIN: ^http://localhost:(3000|4000)$$
+  # Sending mailbox of Démo CRM: emails through Mailpit, copies in GreenMail's IMAP "Sent" folder.
+  DEMO_MAILBOX_SMTP: mailpit:1025
+  DEMO_MAILBOX_IMAP: greenmail:3143
 
 services:
   ldap:
     profiles: !reset []
 
+  # IMAP server of the demo sending mailbox (commercial / secret-pass): connect a mail client to
+  # localhost:3143 to see the copies in "Sent".
+  greenmail:
+    image: greenmail/standalone:2.1.3
+    environment:
+      GREENMAIL_OPTS: -Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=commercial:secret-pass@crm.example.org
+    ports:
+      - "3143:3143"
+
   # One-shot: schema, demo data, then LDAP synchronization (retried while the directory boots).
   demo-seed:
     image: ${API_IMAGE:-rocket-mailer-api}
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     environment:
       <<: *demo-env
       APP_ENV: prod
@@ -71,7 +86,7 @@ services:
     environment:
       NUXT_PUBLIC_API_BASE: ""
       NUXT_PUBLIC_DOCS_URL: ${DEMO_DOCS_URL:-http://localhost:3001}
-      NUXT_PUBLIC_CHANGELOG_URL: ${DEMO_DOCS_URL:-http://localhost:3001}/changelog
+      NUXT_PUBLIC_CHANGELOG_URL: ${DEMO_CHANGELOG_URL:-${DEMO_DOCS_URL:-http://localhost:3001}/changelog}
 
   # Documentation site, with the changelog (/changelog).
   docs:

@@ -30,7 +30,10 @@ final class DemoSeedCommandTest extends WebTestCase
         $this->seed()->assertCommandIsSuccessful();
 
         $templates = $this->em()->getRepository(EmailTemplate::class)->findAll();
-        self::assertCount(2, $templates);
+        self::assertCount(3, $templates);
+        self::assertCount(1, $this->em()->getRepository(\App\Entity\EmailLayout::class)->findAll());
+        $appointment = $this->em()->getRepository(EmailTemplate::class)->findOneBy(['name' => 'Confirmation de rendez-vous']);
+        self::assertSame('Charte Démo CRM', $appointment->getLayout()?->getName());
         self::assertSame('admin@example.org', $templates[0]->getCreatedBy());
 
         [$adminEmail, $adminPassword] = DemoSeedCommand::USERS[0];
@@ -55,6 +58,11 @@ final class DemoSeedCommandTest extends WebTestCase
             false,
             self::DEMO_TOKEN,
             'http://localhost:4000',
+            $container->get(\App\Repository\MailboxRepository::class),
+            $container->get(\App\Repository\EmailLayoutRepository::class),
+            $container->get(\App\Mailbox\SecretBox::class),
+            '',
+            '',
         );
 
         $io = new \Symfony\Component\Console\Style\SymfonyStyle(new \Symfony\Component\Console\Input\ArrayInput([]), new \Symfony\Component\Console\Output\NullOutput());

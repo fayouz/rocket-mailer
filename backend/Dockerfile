@@ -27,5 +27,8 @@ RUN rm -f .env.local .env.*.local \
     && chown -R www-data:www-data var config/jwt
 
 COPY --link --chmod=755 docker/entrypoint.sh /usr/local/bin/app-entrypoint
+# Version shown in the app and compared with the releases ("git describe --tags", passed by the CI).
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
 ENTRYPOINT ["app-entrypoint"]
 CMD ["frankenphp", "run", "--config", "/etc/rocket-mailer/Caddyfile", "--adapter", "caddyfile"]

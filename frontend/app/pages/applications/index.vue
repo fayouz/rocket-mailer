@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { Application } from '~/types/api'
+import type { Application, SenderOption } from '~/types/api'
 
 definePageMeta({ admin: true })
 useHead({ title: 'Applications · Rocket Mailer' })
@@ -14,6 +14,10 @@ const USwitch = resolveComponent('USwitch')
 const UButton = resolveComponent('UButton')
 
 const { data: applications, status, refresh } = await useAsyncData('applications', () => api<Application[]>('/api/applications'), { default: () => [] })
+
+// The platform's default address is only a suggestion for an application's sender, never used as is.
+const { data: platformSenders } = await useAsyncData('applications-sender-suggestion', () => api<SenderOption[]>('/api/senders'), { default: () => [] })
+const suggestion = computed(() => platformSenders.value.find(o => o.default && o.source === 'settings') ?? null)
 
 async function patch(application: Application, body: Partial<Application>) {
   try {
@@ -39,6 +43,16 @@ const columns: TableColumn<Application>[] = [
     accessorKey: 'canImpersonate',
     header: 'Impersonation',
     cell: ({ row }) => h(UBadge, { variant: 'subtle', color: row.original.canImpersonate ? 'warning' : 'neutral', label: row.original.canImpersonate ? 'Autorisée' : 'Non' }),
+  },
+  {
+    accessorKey: 'senderEmail',
+    header: 'Expéditeur',
+    cell: ({ row }) => row.original.senderEmail
+      ? h('div', [
+          h('p', row.original.senderName ?? row.original.senderEmail),
+          row.original.senderName ? h('p', { class: 'text-xs text-muted' }, row.original.senderEmail) : null,
+        ])
+      : h(UBadge, { variant: 'subtle', color: 'error', icon: 'i-lucide-circle-alert', label: 'À configurer' }),
   },
   { accessorKey: 'allowedOrigins', header: 'Origines (embed)', cell: ({ row }) => row.original.allowedOrigins.join(', ') || '—' },
   { accessorKey: 'lastUsedAt', header: 'Dernier appel', cell: ({ row }) => formatDate(row.original.lastUsedAt) },
@@ -70,11 +84,17 @@ const embedOpen = computed({
 
 const formOpen = ref(false)
 const editing = ref<Application | null>(null)
-const form = reactive({ name: '', description: '', canImpersonate: true, allowedOrigins: [] as string[], allowedSenders: [] as string[] })
+const form = reactive({ name: '', description: '', canImpersonate: true, allowedOrigins: [] as string[], allowedSenders: [] as string[], senderName: '', senderEmail: '' })
+
+function useSuggestion() {
+  if (!suggestion.value) return
+  form.senderEmail = suggestion.value.email
+  form.senderName = form.name || suggestion.value.name || ''
+}
 
 function create() {
   editing.value = null
-  Object.assign(form, { name: '', description: '', canImpersonate: true, allowedOrigins: [], allowedSenders: [] })
+  Object.assign(form, { name: '', description: '', canImpersonate: true, allowedOrigins: [], allowedSenders: [], senderName: '', senderEmail: '' })
   formOpen.value = true
 }
 
@@ -91,12 +111,14 @@ function edit(application: Application) {
     canImpersonate: application.canImpersonate,
     allowedOrigins: [...application.allowedOrigins],
     allowedSenders: [...(application.allowedSenders ?? [])],
+    senderName: application.senderName ?? '',
+    senderEmail: application.senderEmail ?? '',
   })
   formOpen.value = true
 }
 
 async function submit() {
-  const body = { ...form, description: form.description || null }
+  const body = { ...form, description: form.description || null, senderName: form.senderName || null, senderEmail: form.senderEmail || null }
   if (editing.value) {
     if (await patch(editing.value, body)) formOpen.value = false
     return
@@ -199,6 +221,34 @@ ${endScript}`)
             <UFormField label="Description">
               <UTextarea v-model="form.description" class="w-full" :rows="2" />
             </UFormField>
+            <div class="flex flex-col gap-2 rounded-md border border-default p-3" data-testid="application-sender">
+              <p class="text-sm font-medium">
+                Expéditeur de l’application
+              </p>
+              <p class="text-xs text-muted">
+                Adresse « De » par défaut de son composeur et de ses envois par l’API. Obligatoire : une application n’envoie jamais depuis les adresses de Rocket Mailer.
+              </p>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <UFormField label="Nom affiché">
+                  <UInput v-model="form.senderName" :placeholder="form.name || 'Service commercial'" class="w-full" />
+                </UFormField>
+                <UFormField label="Adresse email" required>
+                  <UInput v-model="form.senderEmail" type="email" placeholder="contact@crm.exemple.com" class="w-full" data-testid="application-sender-email" />
+                </UFormField>
+              </div>
+              <div v-if="suggestion && !form.senderEmail">
+                <UButton
+                  :label="`Suggestion : ${suggestion.from}`"
+                  icon="i-lucide-wand-sparkles"
+                  size="xs"
+                  color="neutral"
+                  variant="link"
+                  class="px-0"
+                  data-testid="sender-suggestion"
+                  @click="useSuggestion"
+                />
+              </div>
+            </div>
             <USwitch v-model="form.canImpersonate" label="Peut agir en tant qu'utilisateur (impersonation + embed)" />
             <UFormField label="Origines autorisées à embarquer le composeur" hint="ex. https://crm.exemple.com">
               <UInputTags v-model="form.allowedOrigins" add-on-blur add-on-paste class="w-full" />

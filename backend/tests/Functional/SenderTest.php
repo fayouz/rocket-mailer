@@ -156,4 +156,41 @@ final class SenderTest extends WebTestCase
         $this->assertStatus(201);
         self::assertSame(['*@crm.example.com', 'x@example.com'], $created['allowedSenders']);
     }
+
+    public function testApplicationsNeverSendAsThePlatform(): void
+    {
+        $admin = 'Bearer '.$this->jwtFor($this->createUser('admin@example.org', ['ROLE_ADMIN']));
+        $this->createUser('alice@example.org');
+        $asAlice = ['X-Impersonate-User' => 'alice@example.org'];
+
+        // The sender is part of the application; the platform default is only a suggestion for it.
+        $created = $this->api('POST', '/api/applications', ['name' => 'ERP', 'canImpersonate' => true, 'senderEmail' => 'ERP@Example.com', 'senderName' => 'ERP Acme'], $admin);
+        $this->assertStatus(201);
+        self::assertSame(['erp@example.com', 'ERP Acme'], [$created['senderEmail'], $created['senderName']]);
+        $this->api('PATCH', '/api/applications/'.$created['id'], ['senderEmail' => 'not an email'], $admin);
+        $this->assertStatus(422);
+
+        // No sender configured: nothing to offer, and sending is refused with an explanation.
+        [$bare, $token] = $this->createApplication(name: 'Bare', senderEmail: null);
+        self::assertSame([], $this->api('GET', '/api/senders', authorization: 'Bearer '.$token, headers: $asAlice));
+        $response = $this->send('Bearer '.$token, null, $asAlice);
+        $this->assertStatus(422);
+        self::assertStringContainsString('has no sender configured', $response['detail']);
+
+        // Neither the settings' addresses (the platform default included) nor the user's own address.
+        $this->em()->getRepository(\App\Entity\Application::class)->find($bare->getId())->setSenderEmail('bare@partner.example');
+        $this->em()->flush();
+        foreach (['no-reply@example.test', 'alice@example.org'] as $platformAddress) {
+            $this->send('Bearer '.$token, $platformAddress, $asAlice);
+            $this->assertStatus(422);
+        }
+        $options = $this->api('GET', '/api/senders', authorization: 'Bearer '.$token, headers: $asAlice);
+        self::assertSame([['from' => 'Bare <bare@partner.example>', 'default' => true, 'source' => 'application']], array_map(
+            static fn (array $o) => array_intersect_key($o, array_flip(['from', 'default', 'source'])),
+            $options,
+        ));
+        $email = $this->send('Bearer '.$token, null, $asAlice);
+        $this->assertStatus(202);
+        self::assertSame('Bare <bare@partner.example>', $email['from']);
+    }
 }

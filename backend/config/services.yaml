@@ -6,15 +6,33 @@ parameters:
     env(LDAP_SEARCH_PASSWORD): ''
     env(LDAP_USER_FILTER): '(objectClass=inetOrgPerson)'
     env(LDAP_ADMIN_GROUP_DN): ''
+    env(LDAP_START_TLS): '0'
+    env(LDAP_ATTRIBUTE_EMAIL): 'mail'
+    env(LDAP_ATTRIBUTE_FIRST_NAME): 'givenName'
+    env(LDAP_ATTRIBUTE_LAST_NAME): 'sn'
+    env(LDAP_ATTRIBUTE_GROUPS): 'memberOf'
     env(MAILER_DEFAULT_FROM): ''
     env(EMBED_TOKEN_TTL): '900'
     env(ATTACHMENTS_DIR): '%kernel.project_dir%/var/attachments'
     env(ATTACHMENT_MAX_SIZE): '10485760'
     env(ATTACHMENTS_MAX_TOTAL_SIZE): '26214400'
     env(SETUP_TOKEN): ''
+    env(MAILBOX_ENCRYPTION_KEY): ''
+    env(MAILBOX_TIMEOUT): '15'
+    # Update check (GitHub releases of this repository; empty: disabled) and one-click update (Watchtower HTTP API).
+    env(APP_VERSION): ''
+    env(UPDATE_REPOSITORY): 'fayouz/rocket-mailer'
+    env(UPDATER_URL): ''
+    env(UPDATER_TOKEN): ''
+    env(UPDATE_METHOD): ''
+    env(UPDATE_SCRIPT): '%kernel.project_dir%/../deploy/update.sh'
+    env(UPDATE_RESTART_COMMAND): ''
+    env(UPDATE_SCRIPT_TIMEOUT): '1800'
     env(DEMO_MODE): '0'
     env(DEMO_APP_TOKEN): ''
     env(DEMO_HOST_ORIGIN): 'http://localhost:4000'
+    env(DEMO_MAILBOX_SMTP): ''
+    env(DEMO_MAILBOX_IMAP): ''
 
 services:
     _defaults:
@@ -23,3 +41,7 @@ services:
 
     App\:
         resource: '../src/'
+
+when@test:
+    services:
+        App\Tests\Support\HttpMock: ~

@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\EmailTemplateRepository;
+use App\Template\Layouts;
 use App\Template\Placeholders;
 use App\State\EmailTemplateProcessor;
 use Doctrine\DBAL\Types\Types;
@@ -16,6 +17,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
+use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
@@ -74,6 +76,13 @@ class EmailTemplate
     #[Gedmo\Versioned]
     #[Groups(['template:list', 'template:write'])]
     private bool $shared = false;
+
+    /** HTML layout around the content (header, footer, colors…). */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Gedmo\Versioned]
+    #[Groups(['template:write'])]
+    private ?EmailLayout $layout = null;
 
     /**
      * Declared variables ("{{ name }}" placeholders): label and default value shown to whoever fills them.
@@ -181,7 +190,7 @@ class EmailTemplate
     #[Groups(['template:list'])]
     public function getVariables(): array
     {
-        $used = Placeholders::names($this->defaultSubject, $this->html);
+        $used = array_values(array_diff(Placeholders::names($this->defaultSubject, $this->getRenderedHtml()), [Layouts::SLOT]));
         $variables = array_map(static fn (array $v) => $v + ['used' => \in_array($v['name'], $used, true)], $this->variables);
         $declared = array_column($this->variables, 'name');
         foreach (array_diff($used, $declared) as $name) {
@@ -240,6 +249,37 @@ class EmailTemplate
         if (\count($this->variables) > 50) {
             $context->buildViolation('50 variables at most.')->atPath('variables')->addViolation();
         }
+    }
+
+    public function getLayout(): ?EmailLayout
+    {
+        return $this->layout;
+    }
+
+    public function setLayout(?EmailLayout $layout): static
+    {
+        $this->layout = $layout;
+
+        return $this;
+    }
+
+    /** Layout as IRI and name, for the editor and the pickers. */
+    #[Groups(['template:list'])]
+    #[SerializedName('layout')]
+    public function getLayoutSummary(): ?array
+    {
+        return null === $this->layout ? null : [
+            '@id' => '/api/email_layouts/'.$this->layout->getId()->toRfc4122(),
+            'id' => $this->layout->getId()->toRfc4122(),
+            'name' => $this->layout->getName(),
+        ];
+    }
+
+    /** What is imported in the composer and sent: the content in its layout, if any. */
+    #[Groups(['template:read'])]
+    public function getRenderedHtml(): string
+    {
+        return null === $this->layout ? $this->html : Layouts::wrap($this->layout->getHtml(), $this->html);
     }
 
     public function getOwner(): ?User

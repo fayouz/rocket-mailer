@@ -26,7 +26,7 @@ final class SenderController extends AbstractController
     #[Route('/api/senders', name: 'api_senders', methods: ['GET'])]
     public function senders(ActorContext $actor): JsonResponse
     {
-        return $this->json($this->policy->options($actor->requireUser()));
+        return $this->json($this->policy->options($actor->requireUser(), $actor->getApplication()));
     }
 
     #[Route('/api/settings', name: 'api_settings', methods: ['GET'])]
