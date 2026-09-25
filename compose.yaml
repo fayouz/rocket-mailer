@@ -24,6 +24,12 @@ x-api-env: &api-env
   LDAP_SEARCH_PASSWORD: ${LDAP_SEARCH_PASSWORD:-adminpassword}
   LDAP_USER_FILTER: ${LDAP_USER_FILTER:-(objectClass=inetOrgPerson)}
   LDAP_ADMIN_GROUP_DN: ${LDAP_ADMIN_GROUP_DN:-}
+  # Defaults only: once saved in Administration → Annuaire LDAP, the database configuration applies.
+  LDAP_START_TLS: ${LDAP_START_TLS:-0}
+  LDAP_ATTRIBUTE_EMAIL: ${LDAP_ATTRIBUTE_EMAIL:-mail}
+  LDAP_ATTRIBUTE_FIRST_NAME: ${LDAP_ATTRIBUTE_FIRST_NAME:-givenName}
+  LDAP_ATTRIBUTE_LAST_NAME: ${LDAP_ATTRIBUTE_LAST_NAME:-sn}
+  LDAP_ATTRIBUTE_GROUPS: ${LDAP_ATTRIBUTE_GROUPS:-memberOf}
 
 services:
   database:

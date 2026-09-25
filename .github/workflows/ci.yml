@@ -224,6 +224,10 @@ jobs:
           TOKEN=$(curl -fsS -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"marie.martin@example.org","password":"password"}' | jq -r .token)
           curl -fsS http://localhost:3000/api/me -H "Authorization: Bearer $TOKEN" | jq -e '.roles | index("ROLE_ADMIN")'
+          # LDAP settings (environment until saved): the connection test finds the directory's users
+          curl -fsS http://localhost:3000/api/ldap/config -H "Authorization: Bearer $TOKEN" | jq -e '.source == "environment" and .enabled'
+          curl -fsS -X POST http://localhost:3000/api/ldap/test -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
+            | jq -e '.ok and .count >= 2'
           # Third-party host: embed token minted server-side, composer frameable only from its origin
           APP_ID=$(curl -fsS http://localhost:4000/ | grep -o 'applicationId: "[^"]*"' | cut -d'"' -f2)
           curl -fsS "http://localhost:4000/token?user=alice%40example.org" | jq -e .token

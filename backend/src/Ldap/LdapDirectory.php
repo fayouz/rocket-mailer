@@ -3,42 +3,37 @@
 namespace App\Ldap;
 
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Ldap\Entry;
 use Symfony\Component\Ldap\Exception\InvalidCredentialsException;
 use Symfony\Component\Ldap\Ldap;
 use Symfony\Component\Ldap\LdapInterface;
 
+/**
+ * The LDAP directory, configured in the database (LdapSettings): read at each use, so a change in the
+ * administration applies at once.
+ */
 #[AsAlias(UserDirectoryInterface::class)]
 final class LdapDirectory implements UserDirectoryInterface
 {
-    private ?LdapInterface $ldap = null;
-
-    public function __construct(
-        #[Autowire(env: 'bool:LDAP_ENABLED')] private readonly bool $enabled,
-        #[Autowire(env: 'LDAP_URL')] private readonly string $connectionString,
-        #[Autowire(env: 'LDAP_BASE_DN')] private readonly string $baseDn,
-        #[Autowire(env: 'LDAP_SEARCH_DN')] private readonly string $searchDn,
-        #[Autowire(env: 'LDAP_SEARCH_PASSWORD')] private readonly string $searchPassword,
-        #[Autowire(env: 'LDAP_USER_FILTER')] private readonly string $userFilter,
-        #[Autowire(env: 'LDAP_ADMIN_GROUP_DN')] private readonly string $adminGroupDn,
-    ) {
+    public function __construct(private readonly LdapSettings $settings)
+    {
     }
 
     public function isEnabled(): bool
     {
-        return $this->enabled;
+        return $this->settings->get()->enabled;
     }
 
     public function checkCredentials(string $dn, string $password): bool
     {
+        $config = $this->settings->get();
         // An empty password would perform an anonymous bind, which most servers accept.
-        if (!$this->enabled || '' === $dn || '' === $password) {
+        if (!$config->enabled || '' === $dn || '' === $password) {
             return false;
         }
 
         try {
-            $this->ldap()->bind($dn, $password);
+            $this->connect($config)->bind($dn, $password);
 
             return true;
         } catch (InvalidCredentialsException) {
@@ -48,18 +43,40 @@ final class LdapDirectory implements UserDirectoryInterface
 
     public function fetchUsers(): iterable
     {
-        if (!$this->enabled) {
+        $config = $this->settings->get();
+        if (!$config->enabled) {
             return;
         }
 
-        $ldap = $this->ldap();
-        $ldap->bind($this->searchDn, $this->searchPassword);
-        $query = $ldap->query($this->baseDn, $this->userFilter, [
-            'filter' => ['mail', 'givenName', 'sn', 'memberOf'],
+        yield from $this->search($config);
+    }
+
+    public function probe(LdapConfig $config, int $limit = 5): array
+    {
+        $count = 0;
+        $sample = [];
+        foreach ($this->search($config) as $user) {
+            ++$count;
+            if (\count($sample) < $limit) {
+                $sample[] = $user;
+            }
+        }
+
+        return ['count' => $count, 'sample' => $sample];
+    }
+
+    /** @return iterable<DirectoryUser> */
+    private function search(LdapConfig $config): iterable
+    {
+        $ldap = $this->connect($config);
+        $ldap->bind('' === $config->bindDn ? null : $config->bindDn, '' === $config->bindPassword ? null : $config->bindPassword);
+        $attributes = $config->attributes;
+        $query = $ldap->query($config->baseDn, $config->userFilter ?: '(objectClass=*)', [
+            'filter' => array_values(array_unique($attributes)),
         ]);
 
         foreach ($query->execute() as $entry) {
-            $email = $this->first($entry, 'mail');
+            $email = $this->first($entry, $attributes['email']);
             if (null === $email) {
                 continue;
             }
@@ -67,26 +84,43 @@ final class LdapDirectory implements UserDirectoryInterface
             yield new DirectoryUser(
                 dn: $entry->getDn(),
                 email: $email,
-                firstName: $this->first($entry, 'givenName'),
-                lastName: $this->first($entry, 'sn'),
-                admin: '' === $this->adminGroupDn ? null : \in_array(
-                    mb_strtolower($this->adminGroupDn),
-                    array_map('mb_strtolower', $entry->getAttribute('memberOf') ?? []),
+                firstName: $this->first($entry, $attributes['firstName']),
+                lastName: $this->first($entry, $attributes['lastName']),
+                admin: '' === $config->adminGroupDn ? null : \in_array(
+                    mb_strtolower($config->adminGroupDn),
+                    array_map('mb_strtolower', $this->all($entry, $attributes['groups'])),
                     true,
                 ),
             );
         }
     }
 
+    private function connect(LdapConfig $config): LdapInterface
+    {
+        $options = ['connection_string' => $config->url];
+        if ($config->startTls) {
+            $options['encryption'] = 'tls';
+        }
+
+        return Ldap::create('ext_ldap', $options);
+    }
+
     private function first(Entry $entry, string $attribute): ?string
     {
-        $value = $entry->getAttribute($attribute)[0] ?? null;
+        $value = $this->all($entry, $attribute)[0] ?? null;
 
         return null === $value || '' === $value ? null : (string) $value;
     }
 
-    private function ldap(): LdapInterface
+    /** @return list<string> Attribute names are case-insensitive in LDAP. */
+    private function all(Entry $entry, string $attribute): array
     {
-        return $this->ldap ??= Ldap::create('ext_ldap', ['connection_string' => $this->connectionString]);
+        foreach ($entry->getAttributes() as $name => $values) {
+            if (0 === strcasecmp($name, $attribute)) {
+                return array_values(array_map('strval', $values));
+            }
+        }
+
+        return [];
     }
 }

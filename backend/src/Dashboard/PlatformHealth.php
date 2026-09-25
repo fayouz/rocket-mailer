@@ -2,6 +2,7 @@
 
 namespace App\Dashboard;
 
+use App\Ldap\LdapSettings;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -23,8 +24,7 @@ final class PlatformHealth
         private readonly Connection $db,
         private readonly ClockInterface $clock,
         #[Autowire(env: 'MAILER_DSN')] private readonly string $mailerDsn,
-        #[Autowire(env: 'bool:LDAP_ENABLED')] private readonly bool $ldapEnabled,
-        #[Autowire(env: 'LDAP_URL')] private readonly string $ldapUrl,
+        private readonly LdapSettings $ldapSettings,
         #[Autowire(env: 'resolve:ATTACHMENTS_DIR')] private readonly string $attachmentsDir,
     ) {
     }
@@ -113,7 +113,8 @@ final class PlatformHealth
     /** @return array<string, mixed> */
     private function ldap(bool $databaseUp): array
     {
-        if (!$this->ldapEnabled) {
+        $config = $this->ldapSettings->get();
+        if (!$config->enabled) {
             return ['id' => 'ldap', 'label' => 'Annuaire LDAP', 'status' => 'disabled', 'detail' => 'Non configuré'];
         }
 
@@ -125,7 +126,7 @@ final class PlatformHealth
             'id' => 'ldap',
             'label' => 'Annuaire LDAP',
             'status' => self::OPERATIONAL,
-            'detail' => preg_replace('#//[^@/]*@#', '//', $this->ldapUrl),
+            'detail' => preg_replace('#//[^@/]*@#', '//', $config->url),
             'users' => (int) $row['users'],
             'lastSyncAt' => null === $row['synced'] ? null : (new \DateTimeImmutable($row['synced']))->format(\DATE_ATOM),
         ];

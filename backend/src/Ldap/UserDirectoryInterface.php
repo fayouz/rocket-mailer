@@ -10,4 +10,11 @@ interface UserDirectoryInterface
 
     /** @return iterable<DirectoryUser> */
     public function fetchUsers(): iterable;
+
+    /**
+     * Tries a configuration (saved or not): service account bind, then a search.
+     *
+     * @return array{count: int, sample: list<DirectoryUser>}
+     */
+    public function probe(LdapConfig $config, int $limit = 5): array;
 }

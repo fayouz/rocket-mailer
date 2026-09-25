@@ -251,3 +251,33 @@ export interface Collection<T> {
   member: T[]
   totalItems: number
 }
+
+export interface LdapAttributes {
+  email: string
+  firstName: string
+  lastName: string
+  groups: string
+}
+
+/** GET /api/ldap/config: the directory settings (the bind password is never returned). */
+export interface LdapConfig {
+  enabled: boolean
+  url: string
+  startTls: boolean
+  baseDn: string
+  bindDn: string
+  hasBindPassword: boolean
+  userFilter: string
+  adminGroupDn: string
+  attributes: LdapAttributes
+  /** "environment": the LDAP_* variables of the .env (nothing saved yet). */
+  source: 'database' | 'environment'
+  defaults: { attributes: LdapAttributes }
+}
+
+export interface LdapTestResult {
+  ok: boolean
+  message: string
+  count: number
+  sample: { dn: string, email: string, firstName: string | null, lastName: string | null, admin: boolean | null }[]
+}

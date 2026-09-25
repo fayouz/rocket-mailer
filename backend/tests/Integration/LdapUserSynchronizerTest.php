@@ -38,6 +38,11 @@ final class LdapUserSynchronizerTest extends KernelTestCase
             {
                 return $this->entries;
             }
+
+            public function probe(\App\Ldap\LdapConfig $config, int $limit = 5): array
+            {
+                return ['count' => \count($this->entries), 'sample' => \array_slice($this->entries, 0, $limit)];
+            }
         };
 
         $container = static::getContainer();
@@ -109,7 +114,17 @@ final class LdapUserSynchronizerTest extends KernelTestCase
     public function testEmptyPasswordNeverReachesTheDirectory(): void
     {
         // An empty password would be an anonymous bind; it must be refused before any connection attempt.
-        $directory = new LdapDirectory(true, 'ldap://unreachable.invalid', 'dc=ex', '', '', '(objectClass=*)', '');
+        $settings = new class extends \App\Ldap\LdapSettings {
+            public function __construct()
+            {
+            }
+
+            public function get(): \App\Ldap\LdapConfig
+            {
+                return new \App\Ldap\LdapConfig(enabled: true, url: 'ldap://unreachable.invalid', baseDn: 'dc=ex');
+            }
+        };
+        $directory = new LdapDirectory($settings);
 
         self::assertFalse($directory->checkCredentials('uid=alice,dc=ex', ''));
         self::assertFalse($directory->checkCredentials('', 'secret'));

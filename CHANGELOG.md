@@ -6,6 +6,12 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Configuration LDAP dans l'administration** (Administration → Annuaire LDAP) :
+  - URL, STARTTLS, base de recherche, compte de service, filtre, groupe des administrateurs et correspondance des attributs (utile pour Active Directory) ;
+  - stockée en base, avec le mot de passe du compte de service chiffré, et appliquée sans redémarrage ;
+  - bouton **Tester** avec aperçu des utilisateurs trouvés, avant d'enregistrer ;
+  - les variables `LDAP_*` du `.env` restent la configuration par défaut (nouvelles : `LDAP_START_TLS`, `LDAP_ATTRIBUTE_*`), et on peut y revenir d'un clic.
+
 - **Boîtes d'envoi** (Administration → Boîtes d'envoi) : de vrais comptes email depuis lesquels envoyer.
   - Envoi par leur serveur SMTP, ou par un fournisseur (API) : Brevo, Amazon SES, Mailjet, SendGrid, Postmark, Mailgun.
   - Copie de chaque email dans leur dossier « Envoyés » par IMAP : dossier détecté, ou créé s'il manque.

@@ -51,7 +51,7 @@ cd frontend && npm install && npm run dev            # NUXT_PUBLIC_API_BASE=http
 - Synchronisation : `php bin/console app:ldap:sync [--dry-run]` (à planifier en cron) ou bouton « Synchroniser LDAP » (admin).
   Elle crée et met à jour les comptes et désactive ceux qui ont disparu de l'annuaire. Elle ne prend jamais le contrôle d'un compte local portant le même email.
 - `LDAP_ADMIN_GROUP_DN` : les membres de ce groupe (attribut `memberOf`) reçoivent `ROLE_ADMIN`. Vide : les admins sont gérés dans l'application.
-- Variables : `LDAP_ENABLED`, `LDAP_URL`, `LDAP_BASE_DN`, `LDAP_SEARCH_DN`, `LDAP_SEARCH_PASSWORD`, `LDAP_USER_FILTER`, `LDAP_ADMIN_GROUP_DN`.
+- Configuration dans **Administration → Annuaire LDAP** (stockée en base, mot de passe chiffré, bouton **Tester**). Les variables `LDAP_ENABLED`, `LDAP_URL`, `LDAP_START_TLS`, `LDAP_BASE_DN`, `LDAP_SEARCH_DN`, `LDAP_SEARCH_PASSWORD`, `LDAP_USER_FILTER`, `LDAP_ADMIN_GROUP_DN` et `LDAP_ATTRIBUTE_*` en sont la configuration par défaut.
 
 ### Applications externes et impersonation
 Un administrateur crée une application. Son jeton secret (`rma_…`) n'est affiché qu'une seule fois, et seul son hash SHA-256 est stocké.
