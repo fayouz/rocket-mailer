@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { Application, SenderOption } from '~/types/api'
+import type { Application, ApplicationSender, SenderOption } from '~/types/api'
 
+/**
+ * The applications page of the rocket-core layer, with the sender settings of each application
+ * (GET/PATCH /api/application_senders/{id}): its own "From" address and the addresses it may impose.
+ */
 definePageMeta({ admin: true })
 useHead({ title: 'Applications · Rocket Mailer' })
 
@@ -14,6 +18,8 @@ const USwitch = resolveComponent('USwitch')
 const UButton = resolveComponent('UButton')
 
 const { data: applications, status, refresh } = await useAsyncData('applications', () => api<Application[]>('/api/applications'), { default: () => [] })
+const { data: senders, refresh: refreshSenders } = await useAsyncData('application-senders', () => api<ApplicationSender[]>('/api/application_senders', { query: { itemsPerPage: 200 } }), { default: () => [] })
+const senderOf = (application: Application) => senders.value.find(s => s.id === application.id)
 
 // The platform's default address is only a suggestion for an application's sender, never used as is.
 const { data: platformSenders } = await useAsyncData('applications-sender-suggestion', () => api<SenderOption[]>('/api/senders'), { default: () => [] })
@@ -45,14 +51,17 @@ const columns: TableColumn<Application>[] = [
     cell: ({ row }) => h(UBadge, { variant: 'subtle', color: row.original.canImpersonate ? 'warning' : 'neutral', label: row.original.canImpersonate ? 'Autorisée' : 'Non' }),
   },
   {
-    accessorKey: 'senderEmail',
+    id: 'sender',
     header: 'Expéditeur',
-    cell: ({ row }) => row.original.senderEmail
-      ? h('div', [
-          h('p', row.original.senderName ?? row.original.senderEmail),
-          row.original.senderName ? h('p', { class: 'text-xs text-muted' }, row.original.senderEmail) : null,
-        ])
-      : h(UBadge, { variant: 'subtle', color: 'error', icon: 'i-lucide-circle-alert', label: 'À configurer' }),
+    cell: ({ row }) => {
+      const sender = senderOf(row.original)
+      return sender?.senderEmail
+        ? h('div', [
+            h('p', sender.senderName ?? sender.senderEmail),
+            sender.senderName ? h('p', { class: 'text-xs text-muted' }, sender.senderEmail) : null,
+          ])
+        : h(UBadge, { variant: 'subtle', color: 'error', icon: 'i-lucide-circle-alert', label: 'À configurer' })
+    },
   },
   { accessorKey: 'allowedOrigins', header: 'Origines (embed)', cell: ({ row }) => row.original.allowedOrigins.join(', ') || '—' },
   { accessorKey: 'lastUsedAt', header: 'Dernier appel', cell: ({ row }) => formatDate(row.original.lastUsedAt) },
@@ -110,28 +119,48 @@ function edit(application: Application) {
     description: application.description ?? '',
     canImpersonate: application.canImpersonate,
     allowedOrigins: [...application.allowedOrigins],
-    allowedSenders: [...(application.allowedSenders ?? [])],
-    senderName: application.senderName ?? '',
-    senderEmail: application.senderEmail ?? '',
+    allowedSenders: [...(senderOf(application)?.allowedSenders ?? [])],
+    senderName: senderOf(application)?.senderName ?? '',
+    senderEmail: senderOf(application)?.senderEmail ?? '',
   })
   formOpen.value = true
 }
 
+// The sender settings are a resource of their own, saved after the application.
+async function saveSender(application: Application) {
+  try {
+    await api<ApplicationSender>(`/api/application_senders/${application.id}`, {
+      method: 'PATCH',
+      body: { senderName: form.senderName || null, senderEmail: form.senderEmail || null, allowedSenders: form.allowedSenders },
+    })
+    await refreshSenders()
+    return true
+  }
+  catch (error) {
+    toast.add({ title: 'Expéditeur non enregistré', description: apiErrorMessage(error), color: 'error' })
+    return false
+  }
+}
+
 async function submit() {
-  const body = { ...form, description: form.description || null, senderName: form.senderName || null, senderEmail: form.senderEmail || null }
+  const body = { name: form.name, description: form.description || null, canImpersonate: form.canImpersonate, allowedOrigins: form.allowedOrigins }
   if (editing.value) {
-    if (await patch(editing.value, body)) formOpen.value = false
+    if (await patch(editing.value, body) && await saveSender(editing.value)) formOpen.value = false
     return
   }
+  let created: Application
   try {
-    const created = await api<Application>('/api/applications', { method: 'POST', body })
-    formOpen.value = false
-    revealed.value = { application: created, token: created.plainToken! }
-    await refresh()
+    created = await api<Application>('/api/applications', { method: 'POST', body })
   }
   catch (error) {
     toast.add({ title: 'Création impossible', description: apiErrorMessage(error), color: 'error' })
+    return
   }
+  // Created: its token is shown once, even if its sender still has to be fixed (Modifier).
+  await saveSender(created)
+  formOpen.value = false
+  revealed.value = { application: created, token: created.plainToken! }
+  await refresh()
 }
 
 // Secret shown once
