@@ -469,7 +469,8 @@ class Mailbox
             return false;
         }
 
-        return $this->availableToUsers || (null !== $application && $this->applications->contains($application));
+        // Through an application, only its own mailboxes: never the ones shared with the users of Rocket Mailer.
+        return null === $application ? $this->availableToUsers : $this->applications->contains($application);
     }
 
     /**

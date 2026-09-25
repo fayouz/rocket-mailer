@@ -73,6 +73,10 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Sécurité
 
+- **Une application n'envoie plus jamais depuis les adresses de Rocket Mailer** (adresses des Réglages, adresse par défaut de la plateforme) ni depuis l'adresse personnelle de l'utilisateur :
+  - chaque application a son propre **expéditeur** (page Applications, obligatoire pour envoyer) ; l'adresse par défaut de la plateforme y est seulement proposée en suggestion ;
+  - son composeur et ses appels à l'API n'ont droit qu'à cet expéditeur, à ses adresses autorisées et à **ses** boîtes d'envoi (pas celles ouvertes aux utilisateurs de Rocket Mailer) ;
+  - sans expéditeur, le composeur l'indique et l'API répond `422`. **À faire après la mise à jour : renseigner l'expéditeur de chaque application.**
 - Les valeurs des variables sont insérées comme du texte (HTML échappé), et sur une seule ligne dans l'objet.
 
 ## [0.6.0] - 2026-09-24

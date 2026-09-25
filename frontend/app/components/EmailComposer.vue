@@ -66,7 +66,7 @@ const senders = ref<SenderOption[]>([])
 const sourceLabels: Record<SenderOption['source'], string> = {
   settings: 'Adresse de l’organisation',
   personal: 'Votre adresse',
-  application: 'Imposée par l’application',
+  application: 'Adresse de l’application',
   mailbox: 'Boîte d’envoi',
 }
 const optionKey = (option: SenderOption) => (option.mailbox ? `mailbox:${option.mailbox}` : option.from)
@@ -121,10 +121,14 @@ function selectMailbox(reference: string) {
   else toast.add({ title: 'Boîte d’envoi indisponible', description: 'Elle n’est pas rattachée à cette application.', color: 'warning' })
 }
 
+const sendersLoaded = ref(false)
+
 async function loadSenders() {
   try {
     const imposed = senders.value.filter(option => option.source === 'application')
-    senders.value = [...await api<SenderOption[]>('/api/senders'), ...imposed]
+    const offered = await api<SenderOption[]>('/api/senders')
+    senders.value = [...offered, ...imposed.filter(option => !offered.some(o => o.from === option.from))]
+    sendersLoaded.value = true
     if (draft.mailbox) selectMailbox(draft.mailbox)
     else selectFrom(draft.from)
   }
@@ -135,7 +139,10 @@ async function loadSenders() {
 
 onMounted(loadSenders)
 
-const canSend = computed(() => draft.to.length > 0 && draft.subject.trim() !== '' && draft.htmlBody.trim() !== '' && !sending.value && !uploading.value)
+/** Through an application with no sender configured (and no mailbox): nothing can be sent. */
+const noSender = computed(() => sendersLoaded.value && senders.value.length === 0)
+
+const canSend = computed(() => !noSender.value && draft.to.length > 0 && draft.subject.trim() !== '' && draft.htmlBody.trim() !== '' && !sending.value && !uploading.value)
 
 function keepValidAddresses(field: 'to' | 'cc' | 'bcc') {
   const invalid = draft[field].filter(address => !isEmail(address))
@@ -270,11 +277,20 @@ defineExpose({ applyDraft })
 
 <template>
   <form class="flex flex-col gap-4" @submit.prevent="send">
-    <UFormField label="De" required>
+    <UAlert
+      v-if="noSender"
+      color="error"
+      variant="subtle"
+      icon="i-lucide-mail-x"
+      title="Aucune adresse d’expédition"
+      description="Cette application n’a pas d’expéditeur configuré. Un administrateur de Rocket Mailer doit le définir (Administration → Applications)."
+      data-testid="no-sender"
+    />
+    <UFormField v-else label="De" required>
       <USelect
         :model-value="fromKey"
         :items="senderItems"
-        :loading="!senders.length"
+        :loading="!sendersLoaded"
         placeholder="Adresse d’expédition"
         class="w-full"
         data-testid="from-select"

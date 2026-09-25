@@ -37,6 +37,9 @@ export interface Application extends Tracked {
   canImpersonate: boolean
   allowedOrigins: string[]
   allowedSenders: string[]
+  /** Its own sender, required to send (never the platform's addresses). */
+  senderEmail: string | null
+  senderName: string | null
   enabled: boolean
   lastUsedAt: string | null
 }

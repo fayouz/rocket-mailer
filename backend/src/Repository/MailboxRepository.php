@@ -16,8 +16,8 @@ class MailboxRepository extends ServiceEntityRepository
     }
 
     /**
-     * Mailboxes offered when sending through this application (its own and the shared ones),
-     * or in Rocket Mailer itself (null: the shared ones).
+     * Mailboxes offered when sending through this application (its own only),
+     * or in Rocket Mailer itself (null: the ones shared with all users).
      *
      * @return list<Mailbox>
      */
@@ -27,10 +27,11 @@ class MailboxRepository extends ServiceEntityRepository
             ->leftJoin('m.applications', 'a')
             ->where('m.enabled = true')
             ->orderBy('m.name');
+        // In Rocket Mailer: the mailboxes shared with all users. Through an application: only its own mailboxes.
         if (null === $application) {
             $qb->andWhere('m.availableToUsers = true');
         } else {
-            $qb->andWhere('m.availableToUsers = true OR a = :application')->setParameter('application', $application);
+            $qb->andWhere('a = :application')->setParameter('application', $application);
         }
 
         return array_values(array_unique($qb->getQuery()->getResult(), \SORT_REGULAR));

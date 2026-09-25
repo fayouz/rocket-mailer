@@ -79,6 +79,9 @@ final class DemoSeedCommand
             ->setCanImpersonate(true)
             ->setAllowedOrigins([$this->demoHostOrigin])
             ->setAllowedSenders(['*@crm.example.org'])
+            // Its own sender: an application never sends from the platform's addresses.
+            ->setSenderEmail('contact@crm.example.org')
+            ->setSenderName('Démo CRM')
             ->setEnabled(true);
         $application->useToken($this->demoAppToken);
         $this->em->persist($application);

@@ -104,20 +104,23 @@ final class MailboxTest extends WebTestCase
         $sources = fn (array $options) => array_map(static fn (array $o) => $o['source'].':'.$o['email'], $options);
         $asAlice = ['X-Impersonate-User' => 'alice@example.org'];
 
+        // Through an application: its sender and its own mailboxes, not the ones shared with Rocket Mailer's users.
         $crmOptions = $sources($this->api('GET', '/api/senders', authorization: 'Bearer '.$crmToken, headers: $asAlice));
-        self::assertContains('mailbox:commercial@crm.example.org', $crmOptions);
-        self::assertContains('mailbox:support@example.org', $crmOptions);
+        self::assertSame(['application:crm@partner.example', 'mailbox:commercial@crm.example.org'], $crmOptions);
 
         $erpOptions = $sources($this->api('GET', '/api/senders', authorization: 'Bearer '.$erpToken, headers: $asAlice));
-        self::assertNotContains('mailbox:commercial@crm.example.org', $erpOptions);
-        self::assertContains('mailbox:support@example.org', $erpOptions);
+        self::assertSame(['application:crm@partner.example'], $erpOptions);
 
         $appOptions = $sources($this->api('GET', '/api/senders', authorization: 'Bearer '.$this->jwtFor($this->em()->getRepository(\App\Entity\User::class)->findOneBy(['email' => 'alice@example.org']))));
         self::assertSame(['mailbox:support@example.org'], array_values(array_filter($appOptions, static fn (string $s) => str_starts_with($s, 'mailbox:'))));
 
-        // The ERP cannot send through the CRM's mailbox.
+        // The ERP cannot send through the CRM's mailbox, nor through the shared one.
         $this->api('POST', '/api/emails', [
             'to' => ['client@example.com'], 'subject' => 'Hi', 'htmlBody' => '<p>Hi</p>', 'mailbox' => '/api/mailboxes/'.$mailbox['id'],
+        ], 'Bearer '.$erpToken, $asAlice);
+        $this->assertStatus(422);
+        $this->api('POST', '/api/emails', [
+            'to' => ['client@example.com'], 'subject' => 'Hi', 'htmlBody' => '<p>Hi</p>', 'from' => 'support@example.org',
         ], 'Bearer '.$erpToken, $asAlice);
         $this->assertStatus(422);
     }

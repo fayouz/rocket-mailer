@@ -97,8 +97,8 @@ final class ApplicationTest extends WebTestCase
         self::assertSame('sent', $email['status']);
         self::assertEmailCount(1);
         $message = self::getMailerMessage();
-        // Sent from the default address of the settings; replies reach the user.
-        self::assertEmailAddressContains($message, 'From', 'no-reply@example.test');
+        // Sent from the application's own sender, never the platform's; replies reach the user.
+        self::assertEmailAddressContains($message, 'From', 'crm@partner.example');
         self::assertEmailAddressContains($message, 'Reply-To', 'alice@example.org');
         self::assertEmailAddressContains($message, 'To', 'client@example.com');
 

@@ -255,8 +255,15 @@ jobs:
           # Dashboard: the whole platform and service details for admins
           curl -fsS http://localhost:3000/api/dashboard -H "Authorization: Bearer $TOKEN" \
             | jq -e '.scope == "platform" and (.daily | length) == 30 and ([.health.services[] | select(.id == "database" or .id == "ldap") | .status] == ["operational", "operational"])'
-          # Sending mailbox of Démo CRM (designated by its address): through Mailpit, copy in GreenMail's IMAP "Sent"
           DEMO_TOKEN=rma_demo_rocket_mailer_do_not_use_in_production
+          # An application sends from its own sender, never from the platform's addresses
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/api/emails -H "Authorization: Bearer $DEMO_TOKEN" \
+            -H 'X-Impersonate-User: alice@example.org' -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d '{"to":["client@example.com"],"subject":"CI platform","htmlBody":"<p>no</p>","from":"no-reply@example.org"}')" = 422
+          curl -fsS -X POST http://localhost:3000/api/emails -H "Authorization: Bearer $DEMO_TOKEN" \
+            -H 'X-Impersonate-User: alice@example.org' -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d '{"to":["client@example.com"],"subject":"CI app sender","htmlBody":"<p>ok</p>"}' | jq -e '.from == "Démo CRM <contact@crm.example.org>"'
+          # Sending mailbox of Démo CRM (designated by its address): through Mailpit, copy in GreenMail's IMAP "Sent"
           MAILBOX_EMAIL=$(curl -fsS -X POST http://localhost:3000/api/emails -H "Authorization: Bearer $DEMO_TOKEN" \
             -H 'X-Impersonate-User: alice@example.org' -H 'Content-Type: application/json' -H 'Accept: application/json' \
             -d '{"to":["client@example.com"],"subject":"CI mailbox","htmlBody":"<p>ok</p>","from":"commercial@crm.example.org"}')

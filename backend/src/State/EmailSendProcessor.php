@@ -86,7 +86,7 @@ final class EmailSendProcessor implements ProcessorInterface
 
     /**
      * The sending mailbox: given explicitly ("mailbox"), or designated by its address in "from".
-     * Only the mailboxes of the calling application, or those available to all users, can be used.
+     * Through an application, only its own mailboxes; otherwise, those available to all users.
      */
     private function resolveMailbox(Email $email, ?Application $application): ?Mailbox
     {
