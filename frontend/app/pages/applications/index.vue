@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { Application, SenderOption } from '~/types/api'
+import type { Application, ColorPalette, SenderOption } from '~/types/api'
 
 definePageMeta({ admin: true })
 useHead({ title: 'Applications · Rocket Mailer' })
@@ -17,9 +17,15 @@ const { data: applications, status, refresh } = await useAsyncData('applications
 
 // The platform's default address is only a suggestion for an application's sender, never used as is.
 const { data: platformSenders } = await useAsyncData('applications-sender-suggestion', () => api<SenderOption[]>('/api/senders'), { default: () => [] })
+// Colors of its embedded composer; empty: the project's palette.
+const { data: palettes } = await useAsyncData('applications-palettes', () => api<ColorPalette[]>('/api/color_palettes'), { default: () => [] })
+const paletteItems = computed(() => [
+  { label: 'Palette du projet', value: 'project' },
+  ...palettes.value.map(palette => ({ label: palette.name, value: `/api/color_palettes/${palette.id}` })),
+])
 const suggestion = computed(() => platformSenders.value.find(o => o.default && o.source === 'settings') ?? null)
 
-async function patch(application: Application, body: Partial<Application>) {
+async function patch(application: Application, body: Record<string, unknown>) {
   try {
     Object.assign(application, await api<Application>(`/api/applications/${application.id}`, { method: 'PATCH', body }))
     return true
@@ -84,7 +90,7 @@ const embedOpen = computed({
 
 const formOpen = ref(false)
 const editing = ref<Application | null>(null)
-const form = reactive({ name: '', description: '', canImpersonate: true, allowedOrigins: [] as string[], allowedSenders: [] as string[], senderName: '', senderEmail: '' })
+const form = reactive({ name: '', description: '', canImpersonate: true, allowedOrigins: [] as string[], allowedSenders: [] as string[], senderName: '', senderEmail: '', palette: 'project' })
 
 function useSuggestion() {
   if (!suggestion.value) return
@@ -94,7 +100,7 @@ function useSuggestion() {
 
 function create() {
   editing.value = null
-  Object.assign(form, { name: '', description: '', canImpersonate: true, allowedOrigins: [], allowedSenders: [], senderName: '', senderEmail: '' })
+  Object.assign(form, { name: '', description: '', canImpersonate: true, allowedOrigins: [], allowedSenders: [], senderName: '', senderEmail: '', palette: 'project' })
   formOpen.value = true
 }
 
@@ -113,12 +119,13 @@ function edit(application: Application) {
     allowedSenders: [...(application.allowedSenders ?? [])],
     senderName: application.senderName ?? '',
     senderEmail: application.senderEmail ?? '',
+    palette: application.palette?.['@id'] ?? 'project',
   })
   formOpen.value = true
 }
 
 async function submit() {
-  const body = { ...form, description: form.description || null, senderName: form.senderName || null, senderEmail: form.senderEmail || null }
+  const body = { ...form, description: form.description || null, senderName: form.senderName || null, senderEmail: form.senderEmail || null, palette: form.palette === 'project' ? null : form.palette }
   if (editing.value) {
     if (await patch(editing.value, body)) formOpen.value = false
     return
@@ -252,6 +259,9 @@ ${endScript}`)
             <USwitch v-model="form.canImpersonate" label="Peut agir en tant qu'utilisateur (impersonation + embed)" />
             <UFormField label="Origines autorisées à embarquer le composeur" hint="ex. https://crm.exemple.com">
               <UInputTags v-model="form.allowedOrigins" add-on-blur add-on-paste class="w-full" />
+            </UFormField>
+            <UFormField label="Palette du composeur embarqué" hint="Par défaut : celle du projet">
+              <USelect v-model="form.palette" :items="paletteItems" class="w-full" data-testid="application-palette" />
             </UFormField>
             <UFormField label="Adresses d'expédition qu'elle peut imposer" hint="ex. *@crm.exemple.com ou agence@exemple.com">
               <UInputTags v-model="form.allowedSenders" add-on-blur add-on-paste class="w-full" />

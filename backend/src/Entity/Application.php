@@ -14,6 +14,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Serializer\Attribute\Groups;
+use Symfony\Component\Serializer\Attribute\SerializedName;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -98,6 +99,12 @@ class Application
     #[Assert\Length(max: 120)]
     #[Groups(['app:read', 'app:write'])]
     private ?string $senderName = null;
+
+    /** Colors of its embedded composer; null: the project's palette. */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(onDelete: 'SET NULL')]
+    #[Groups(['app:write'])]
+    private ?ColorPalette $palette = null;
 
     #[ORM\Column]
     #[Groups(['app:read', 'app:write'])]
@@ -288,5 +295,29 @@ class Application
     public function getSenderAddress(): ?Address
     {
         return null === $this->senderEmail ? null : new Address($this->senderEmail, $this->senderName ?? '');
+    }
+
+    public function getPalette(): ?ColorPalette
+    {
+        return $this->palette;
+    }
+
+    public function setPalette(?ColorPalette $palette): static
+    {
+        $this->palette = $palette;
+
+        return $this;
+    }
+
+    /** @return array{'@id': string, id: string, name: string}|null */
+    #[Groups(['app:read'])]
+    #[SerializedName('palette')]
+    public function getPaletteSummary(): ?array
+    {
+        return null === $this->palette ? null : [
+            '@id' => '/api/color_palettes/'.$this->palette->getId(),
+            'id' => (string) $this->palette->getId(),
+            'name' => $this->palette->getName(),
+        ];
     }
 }

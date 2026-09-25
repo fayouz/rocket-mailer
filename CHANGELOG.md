@@ -6,6 +6,13 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Thème clair, sombre ou système**, au choix de chaque utilisateur (bouton en bas du menu, et sur la page de connexion).
+- **Palettes de couleurs** (Administration → Palettes) : couleurs principale, secondaire, succès, information, avertissement et erreur, ton des gris, avec aperçu ; les nuances sont calculées.
+  - La **palette du projet** habille Rocket Mailer, page de connexion comprise (Palettes → « Utiliser pour le projet », ou Réglages).
+  - Elle est aussi la palette par défaut du composeur embarqué ; chaque **application** peut en choisir une autre (page Applications).
+  - API : `/api/color_palettes`, `palette` dans `PATCH /api/settings` et sur les applications, `GET /api/theme` (public).
+  - Démo : le composeur de la Démo CRM prend sa palette indigo « Démo CRM ».
+
 - **Santé des boîtes d'envoi et de l'annuaire LDAP** sur le tableau de bord :
   - le worker vérifie toutes les 5 minutes (Symfony Scheduler) chaque boîte active (connexion et authentification SMTP, IMAP si la copie est activée) et le serveur LDAP (authentification du compte de service, lecture de la base) ;
   - le tableau de bord affiche l'état de chaque boîte, l'erreur éventuelle et depuis quand un service est en échec ; bouton **Vérifier** pour relancer tout de suite ;
