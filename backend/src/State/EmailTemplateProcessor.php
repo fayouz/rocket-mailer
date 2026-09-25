@@ -5,7 +5,7 @@ namespace App\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Entity\EmailTemplate;
-use App\Security\ActorContext;
+use Rocket\Core\Security\ActorContext;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /** @implements ProcessorInterface<EmailTemplate, EmailTemplate> */

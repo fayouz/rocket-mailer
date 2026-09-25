@@ -4,9 +4,9 @@ namespace App\Controller;
 
 use App\Entity\EmailTemplate;
 use App\Entity\EmailTemplateVersion;
-use App\Security\Roles;
 use Doctrine\ORM\EntityManagerInterface;
 use Gedmo\Loggable\Entity\Repository\LogEntryRepository;
+use Rocket\Core\Security\Roles;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;

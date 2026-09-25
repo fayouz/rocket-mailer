@@ -2,14 +2,17 @@
 
 namespace App\Tests\Functional;
 
-use App\Command\DemoSeedCommand;
+use App\Entity\ApplicationSender;
+use App\Entity\EmailLayout;
 use App\Entity\EmailTemplate;
 use App\Tests\ApiTestTrait;
+use Rocket\Core\Command\DemoSeedCommand;
+use Rocket\Core\Entity\Application;
 use Symfony\Bundle\FrameworkBundle\Console\Application as ConsoleApplication;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
+/** The demo data of Rocket Mailer (App\Command\MailerDemoSeeder), loaded by app:demo:seed of rocket-core. */
 final class DemoSeedCommandTest extends WebTestCase
 {
     use ApiTestTrait;
@@ -31,7 +34,7 @@ final class DemoSeedCommandTest extends WebTestCase
 
         $templates = $this->em()->getRepository(EmailTemplate::class)->findAll();
         self::assertCount(3, $templates);
-        self::assertCount(1, $this->em()->getRepository(\App\Entity\EmailLayout::class)->findAll());
+        self::assertCount(1, $this->em()->getRepository(EmailLayout::class)->findAll());
         $appointment = $this->em()->getRepository(EmailTemplate::class)->findOneBy(['name' => 'Confirmation de rendez-vous']);
         self::assertSame('Charte Démo CRM', $appointment->getLayout()?->getName());
         self::assertSame('admin@example.org', $templates[0]->getCreatedBy());
@@ -41,32 +44,17 @@ final class DemoSeedCommandTest extends WebTestCase
         $this->assertStatus(200);
         self::assertContains('ROLE_ADMIN', $this->api('GET', '/api/me', authorization: 'Bearer '.$login['token'])['roles']);
 
-        $this->api('POST', '/api/embed/token', authorization: 'Bearer '.self::DEMO_TOKEN, headers: ['X-Impersonate-User' => 'alice@example.org']);
+        // The demo application is Démo CRM: its origin, its own sender and its mailbox.
+        $application = $this->em()->getRepository(Application::class)->findOneByToken(self::DEMO_TOKEN);
+        self::assertSame(['http://localhost:4000'], $application->getAllowedOrigins());
+        $sender = $this->em()->find(ApplicationSender::class, $application->getId());
+        self::assertSame(['contact@crm.example.org', 'Démo CRM', ['*@crm.example.org']], [$sender->getSenderEmail(), $sender->getSenderName(), $sender->getAllowedSenders()]);
+
+        $asAlice = ['X-Impersonate-User' => 'alice@example.org'];
+        $this->api('POST', '/api/embed/token', authorization: 'Bearer '.self::DEMO_TOKEN, headers: $asAlice);
         $this->assertStatus(201);
-    }
-
-    public function testRefusesOutsideDemoMode(): void
-    {
-        $container = static::getContainer();
-        $command = new DemoSeedCommand(
-            $container->get(\Doctrine\ORM\EntityManagerInterface::class),
-            $container->get(\App\Repository\UserRepository::class),
-            $container->get(\App\Repository\ApplicationRepository::class),
-            $container->get(\App\Repository\EmailTemplateRepository::class),
-            $container->get(\Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface::class),
-            $container->get('security.token_storage'),
-            false,
-            self::DEMO_TOKEN,
-            'http://localhost:4000',
-            $container->get(\App\Repository\MailboxRepository::class),
-            $container->get(\App\Repository\EmailLayoutRepository::class),
-            $container->get(\App\Mailbox\SecretBox::class),
-            '',
-            '',
-        );
-
-        $io = new \Symfony\Component\Console\Style\SymfonyStyle(new \Symfony\Component\Console\Input\ArrayInput([]), new \Symfony\Component\Console\Output\NullOutput());
-        self::assertSame(Command::FAILURE, $command($io));
-        self::assertSame([], $this->em()->getRepository(EmailTemplate::class)->findAll());
+        $email = $this->api('POST', '/api/emails', ['to' => ['client@example.com'], 'subject' => 'Démo', 'htmlBody' => '<p>ok</p>'], 'Bearer '.self::DEMO_TOKEN, $asAlice);
+        $this->assertStatus(202);
+        self::assertSame('Démo CRM <contact@crm.example.org>', $email['from']);
     }
 }

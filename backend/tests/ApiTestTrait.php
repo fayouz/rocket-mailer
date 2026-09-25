@@ -2,10 +2,11 @@
 
 namespace App\Tests;
 
-use App\Entity\Application;
-use App\Entity\User;
+use App\Entity\ApplicationSender;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use Rocket\Core\Entity\Application;
+use Rocket\Core\Entity\User;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
@@ -34,14 +35,21 @@ trait ApiTestTrait
         return $user;
     }
 
-    /** @param list<string> $origins */
-    /** The application has its own sender (required to send): "Partner CRM <crm@partner.example>". */
+    /**
+     * The application has its own sender (required to send): "Partner CRM <crm@partner.example>".
+     *
+     * @param list<string> $origins
+     *
+     * @return array{0: Application, 1: string} the application and its secret
+     */
     protected function createApplication(bool $canImpersonate = true, array $origins = ['https://partner.example'], string $name = 'Partner CRM', ?string $senderEmail = 'crm@partner.example'): array
     {
-        $application = (new Application())->setName($name)->setCanImpersonate($canImpersonate)->setAllowedOrigins($origins)
-            ->setSenderEmail($senderEmail)->setSenderName($name);
+        $application = (new Application())->setName($name)->setCanImpersonate($canImpersonate)->setAllowedOrigins($origins);
         $token = $application->rotateToken();
         $this->em()->persist($application);
+        if (null !== $senderEmail) {
+            $this->em()->persist((new ApplicationSender($application))->setSenderEmail($senderEmail)->setSenderName($name));
+        }
         $this->em()->flush();
 
         return [$application, $token];

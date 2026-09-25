@@ -2,11 +2,11 @@
 
 namespace App\Controller;
 
-use App\Security\ActorContext;
 use App\Sender\SenderPolicy;
-use App\Sender\Settings;
-use App\Security\Roles;
 use Doctrine\ORM\EntityManagerInterface;
+use Rocket\Core\Security\ActorContext;
+use Rocket\Core\Security\Roles;
+use Rocket\Core\Settings\Settings;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -37,7 +37,7 @@ final class SenderController extends AbstractController
         $this->policy->options($actor->requireUser());
 
         return $this->json([
-            'personalFromAllowed' => $this->settings->isPersonalFromAllowed(),
+            'personalFromAllowed' => $this->policy->isPersonalFromAllowed(),
             'installDefaultFrom' => $installDefault,
         ]);
     }
@@ -47,10 +47,10 @@ final class SenderController extends AbstractController
     public function updateSettings(#[MapRequestPayload] SettingsInput $input, EntityManagerInterface $em): JsonResponse
     {
         if (null !== $input->personalFromAllowed) {
-            $this->settings->set(Settings::PERSONAL_FROM_ALLOWED, $input->personalFromAllowed);
+            $this->settings->set(SenderPolicy::PERSONAL_FROM_ALLOWED, $input->personalFromAllowed);
         }
         $em->flush();
 
-        return $this->json(['personalFromAllowed' => $this->settings->isPersonalFromAllowed()]);
+        return $this->json(['personalFromAllowed' => $this->policy->isPersonalFromAllowed()]);
     }
 }

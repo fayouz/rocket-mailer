@@ -2,8 +2,12 @@
 
 namespace App\Tests\Functional;
 
+use App\Entity\ApplicationSender;
 use App\Tests\ApiTestTrait;
+use Rocket\Core\Entity\Application;
+use Rocket\Core\Entity\User;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Uid\Uuid;
 
 /** MAILER_DEFAULT_FROM="Rocket Test <no-reply@example.test>" in .env.test */
 final class SenderTest extends WebTestCase
@@ -120,7 +124,7 @@ final class SenderTest extends WebTestCase
     {
         $this->createUser('alice@example.org');
         [$application, $token] = $this->createApplication();
-        $application->setAllowedSenders(['*@crm.example.com', 'direction@example.com']);
+        $this->em()->find(ApplicationSender::class, $application->getId())->setAllowedSenders(['*@crm.example.com', 'direction@example.com']);
         $this->em()->flush();
         $asAlice = ['X-Impersonate-User' => 'alice@example.org'];
 
@@ -142,19 +146,38 @@ final class SenderTest extends WebTestCase
         $this->assertStatus(202);
 
         // A user alone cannot use the application's domains.
-        $this->send('Bearer '.$this->jwtFor($this->em()->getRepository(\App\Entity\User::class)->findOneBy(['email' => 'alice@example.org'])), 'lyon@crm.example.com');
+        $this->send('Bearer '.$this->jwtFor($this->em()->getRepository(User::class)->findOneBy(['email' => 'alice@example.org'])), 'lyon@crm.example.com');
         $this->assertStatus(422);
     }
 
-    public function testApplicationSenderPatternsAreValidated(): void
+    public function testApplicationSenderSettings(): void
     {
         $admin = 'Bearer '.$this->jwtFor($this->createUser('admin@example.org', ['ROLE_ADMIN']));
+        $application = $this->api('POST', '/api/applications', ['name' => 'CRM'], $admin);
 
-        $this->api('POST', '/api/applications', ['name' => 'CRM', 'allowedSenders' => ['*@*']], $admin);
+        // Readable before anything is saved, then saved by the first PATCH.
+        $sender = $this->api('GET', '/api/application_senders/'.$application['id'], authorization: $admin);
+        $this->assertStatus(200);
+        self::assertEquals(['id' => $application['id'], 'allowedSenders' => []], $sender);
+        self::assertSame([], $this->api('GET', '/api/application_senders', authorization: $admin));
+
+        $this->api('PATCH', '/api/application_senders/'.$application['id'], ['allowedSenders' => ['*@*']], $admin);
         $this->assertStatus(422);
-        $created = $this->api('POST', '/api/applications', ['name' => 'CRM', 'allowedSenders' => ['*@CRM.example.com', 'x@example.com']], $admin);
-        $this->assertStatus(201);
-        self::assertSame(['*@crm.example.com', 'x@example.com'], $created['allowedSenders']);
+        $sender = $this->api('PATCH', '/api/application_senders/'.$application['id'], ['senderEmail' => ' CRM@Example.com ', 'senderName' => 'CRM', 'allowedSenders' => ['*@CRM.example.com', 'x@example.com']], $admin);
+        $this->assertStatus(200);
+        self::assertSame(['crm@example.com', ['*@crm.example.com', 'x@example.com']], [$sender['senderEmail'], $sender['allowedSenders']]);
+        self::assertSame([$application['id']], array_column($this->api('GET', '/api/application_senders', authorization: $admin), 'id'));
+
+        $this->api('GET', '/api/application_senders/'.Uuid::v7(), authorization: $admin);
+        $this->assertStatus(404);
+        $this->api('GET', '/api/application_senders/'.$application['id'], authorization: 'Bearer '.$this->jwtFor($this->createUser('alice@example.org')));
+        $this->assertStatus(403);
+
+        // They go with their application.
+        $this->api('DELETE', '/api/applications/'.$application['id'], authorization: $admin);
+        $this->assertStatus(204);
+        $this->em()->clear();
+        self::assertSame([], $this->em()->getRepository(ApplicationSender::class)->findAll());
     }
 
     public function testApplicationsNeverSendAsThePlatform(): void
@@ -164,10 +187,11 @@ final class SenderTest extends WebTestCase
         $asAlice = ['X-Impersonate-User' => 'alice@example.org'];
 
         // The sender is part of the application; the platform default is only a suggestion for it.
-        $created = $this->api('POST', '/api/applications', ['name' => 'ERP', 'canImpersonate' => true, 'senderEmail' => 'ERP@Example.com', 'senderName' => 'ERP Acme'], $admin);
-        $this->assertStatus(201);
-        self::assertSame(['erp@example.com', 'ERP Acme'], [$created['senderEmail'], $created['senderName']]);
-        $this->api('PATCH', '/api/applications/'.$created['id'], ['senderEmail' => 'not an email'], $admin);
+        $created = $this->api('POST', '/api/applications', ['name' => 'ERP', 'canImpersonate' => true], $admin);
+        $sender = $this->api('PATCH', '/api/application_senders/'.$created['id'], ['senderEmail' => 'ERP@Example.com', 'senderName' => 'ERP Acme'], $admin);
+        $this->assertStatus(200);
+        self::assertSame(['erp@example.com', 'ERP Acme'], [$sender['senderEmail'], $sender['senderName']]);
+        $this->api('PATCH', '/api/application_senders/'.$created['id'], ['senderEmail' => 'not an email'], $admin);
         $this->assertStatus(422);
 
         // No sender configured: nothing to offer, and sending is refused with an explanation.
@@ -178,7 +202,7 @@ final class SenderTest extends WebTestCase
         self::assertStringContainsString('has no sender configured', $response['detail']);
 
         // Neither the settings' addresses (the platform default included) nor the user's own address.
-        $this->em()->getRepository(\App\Entity\Application::class)->find($bare->getId())->setSenderEmail('bare@partner.example');
+        $this->em()->persist((new ApplicationSender($this->em()->find(Application::class, $bare->getId())))->setSenderEmail('bare@partner.example')->setSenderName('Bare'));
         $this->em()->flush();
         foreach (['no-reply@example.test', 'alice@example.org'] as $platformAddress) {
             $this->send('Bearer '.$token, $platformAddress, $asAlice);

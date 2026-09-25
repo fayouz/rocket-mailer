@@ -5,7 +5,7 @@ security:
     providers:
         app_user_provider:
             entity:
-                class: App\Entity\User
+                class: Rocket\Core\Entity\User
                 property: email
 
     role_hierarchy:
@@ -19,23 +19,23 @@ security:
             pattern: ^/api/auth/login$
             stateless: true
             provider: app_user_provider
-            user_checker: App\Security\UserChecker
+            user_checker: Rocket\Core\Security\UserChecker
             custom_authenticators:
-                - App\Security\LoginAuthenticator
+                - Rocket\Core\Security\LoginAuthenticator
         api:
             pattern: ^/api
             stateless: true
             provider: app_user_provider
-            user_checker: App\Security\UserChecker
+            user_checker: Rocket\Core\Security\UserChecker
             entry_point: jwt
             jwt: ~
             custom_authenticators:
-                - App\Security\ApplicationTokenAuthenticator
-                - App\Security\EmbedTokenAuthenticator
+                - Rocket\Core\Security\ApplicationTokenAuthenticator
+                - Rocket\Core\Security\EmbedTokenAuthenticator
 
     access_control:
         - { path: ^/api/auth/login$, roles: PUBLIC_ACCESS }
-        - { path: ^/api/setup$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/(setup|suite)$, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/(providers|oidc/callback)$, roles: PUBLIC_ACCESS }
         - { path: ^/api/docs, roles: PUBLIC_ACCESS }
         - { path: ^/api/embed/frame-policy$, roles: PUBLIC_ACCESS }

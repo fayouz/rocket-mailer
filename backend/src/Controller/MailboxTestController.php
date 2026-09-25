@@ -5,7 +5,7 @@ namespace App\Controller;
 use App\Entity\Mailbox;
 use App\Mailbox\MailboxConnector;
 use App\Mailbox\MailboxTestInput;
-use App\Security\Roles;
+use Rocket\Core\Security\Roles;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
