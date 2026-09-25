@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { AuthenticationServer, AuthenticationServerDiscoveryCandidate, Collection, LdapTestResult } from '~/types/api'
+import type { AuthenticationServer, AuthenticationServerDiscoveryCandidate, Collection, LdapTestResult, OidcTestResult } from '~/types/api'
 
 definePageMeta({ admin: true })
 useHead({ title: 'Serveurs d’authentification · Rocket Mailer' })
@@ -31,7 +31,10 @@ const formOpen = ref(false)
 const editing = ref<AuthenticationServer | null>(null)
 const toDelete = ref<AuthenticationServer | null>(null)
 const disableLinkedUsers = ref(true)
-const form = reactive({ name: '', type: 'ldap' as AuthenticationServer['type'], enabled: false, url: 'ldap://' })
+const OIDC_DEFAULTS = { internalUrl: '', clientId: '', clientSecret: '', scopes: 'openid email profile groups', adminGroupDn: '', linkExistingAccounts: false }
+const form = reactive({ name: '', type: 'ldap' as AuthenticationServer['type'], enabled: false, url: 'ldap://', ...OIDC_DEFAULTS })
+// Where the provider must send users back: to be declared on the client registered at the provider.
+const redirectUri = import.meta.client ? oidcRedirectUri() : ''
 const wizardOpen = ref(false)
 const wizardStep = ref(1)
 const wizardType = ref<AuthenticationServer['type']>('ldap')
@@ -40,7 +43,8 @@ const discovery = ref<AuthenticationServerDiscoveryCandidate[]>([])
 const wizardError = ref('')
 const wizardTesting = ref(false)
 const wizardSaving = ref(false)
-const wizardResult = ref<LdapTestResult | null>(null)
+const wizardResult = ref<LdapTestResult | OidcTestResult | null>(null)
+const oidcForm = reactive({ name: 'Rocket Auth', url: 'https://', ...OIDC_DEFAULTS, linkExistingAccounts: false })
 const wizardForm = reactive({
   name: 'LDAP',
   url: '',
@@ -72,8 +76,17 @@ async function openWizard() {
 }
 
 async function startDiscovery() {
+  if (wizardType.value === 'oidc') {
+    // Nothing to detect: the issuer's discovery document is read when testing.
+    wizardStep.value = 3
+    return
+  }
   wizardStep.value = 2
   await discoverServers()
+}
+
+function previousStep() {
+  wizardStep.value = wizardType.value === 'oidc' && wizardStep.value === 3 ? 1 : wizardStep.value - 1
 }
 
 function continueManually() {
@@ -90,7 +103,9 @@ async function testWizard() {
   wizardTesting.value = true
   wizardError.value = ''
   try {
-    wizardResult.value = await api<LdapTestResult>('/api/ldap/test', { method: 'POST', body: { ...wizardForm, enabled: true } })
+    wizardResult.value = wizardType.value === 'oidc'
+      ? await api<OidcTestResult>('/api/authentication_servers/oidc/test', { method: 'POST', body: { url: oidcForm.url, internalUrl: oidcForm.internalUrl } })
+      : await api<LdapTestResult>('/api/ldap/test', { method: 'POST', body: { ...wizardForm, enabled: true } })
     wizardStep.value = 4
   }
   catch (error) {
@@ -104,6 +119,20 @@ async function testWizard() {
 async function saveWizard() {
   wizardSaving.value = true
   wizardError.value = ''
+  if (wizardType.value === 'oidc') {
+    try {
+      await api<AuthenticationServer>('/api/authentication_servers', { method: 'POST', body: { ...oidcForm, type: 'oidc', enabled: true } })
+      wizardOpen.value = false
+      await refresh()
+    }
+    catch (error) {
+      wizardError.value = apiErrorMessage(error)
+    }
+    finally {
+      wizardSaving.value = false
+    }
+    return
+  }
   try {
     await api('/api/ldap/config', { method: 'PUT', body: { ...wizardForm, enabled: true } })
     const servers = await api<Collection<AuthenticationServer>>('/api/authentication_servers', { query: { itemsPerPage: 100 }, headers: { Accept: 'application/ld+json' } })
@@ -122,30 +151,39 @@ async function saveWizard() {
   }
 }
 
-function create() {
-  editing.value = null
-  Object.assign(form, { name: '', type: 'ldap', enabled: false, url: 'ldap://' })
-  formOpen.value = true
-}
-
 function edit(server: AuthenticationServer) {
   editing.value = server
-  Object.assign(form, { name: server.name, type: server.type, enabled: server.enabled, url: server.url })
+  Object.assign(form, {
+    name: server.name,
+    type: server.type,
+    enabled: server.enabled,
+    url: server.url,
+    internalUrl: server.internalUrl ?? '',
+    clientId: server.clientId ?? '',
+    clientSecret: '',
+    scopes: server.scopes ?? OIDC_DEFAULTS.scopes,
+    adminGroupDn: server.adminGroupDn ?? '',
+    linkExistingAccounts: server.linkExistingAccounts ?? false,
+  })
   formOpen.value = true
 }
 
 function askDelete(server: AuthenticationServer) {
   toDelete.value = server
-  disableLinkedUsers.value = server.type === 'ldap'
+  disableLinkedUsers.value = true
 }
 
 async function submit() {
+  // LDAP servers are configured on their own page (/ldap): only the common fields here.
+  const body = form.type === 'oidc'
+    ? { ...form }
+    : { name: form.name, type: form.type, enabled: form.enabled, url: form.url }
   try {
     if (editing.value) {
-      Object.assign(editing.value, await api<AuthenticationServer>(`/api/authentication_servers/${editing.value.id}`, { method: 'PATCH', body: form }))
+      Object.assign(editing.value, await api<AuthenticationServer>(`/api/authentication_servers/${editing.value.id}`, { method: 'PATCH', body }))
     }
     else {
-      await api<AuthenticationServer>('/api/authentication_servers', { method: 'POST', body: form })
+      await api<AuthenticationServer>('/api/authentication_servers', { method: 'POST', body })
     }
     formOpen.value = false
     await refresh()
@@ -189,7 +227,9 @@ const columns: TableColumn<AuthenticationServer>[] = [
   {
     accessorKey: 'type',
     header: 'Type',
-    cell: ({ row }) => h(UBadge, { label: row.original.type.toUpperCase(), color: 'info', variant: 'subtle' }),
+    cell: ({ row }) => h(UBadge, row.original.type === 'oidc'
+      ? { label: 'OpenID Connect', color: 'primary', variant: 'subtle' }
+      : { label: 'LDAP', color: 'info', variant: 'subtle' }),
   },
   {
     accessorKey: 'enabled',
@@ -204,7 +244,7 @@ const columns: TableColumn<AuthenticationServer>[] = [
         label: 'Configurer',
         color: 'neutral',
         variant: 'ghost',
-        onClick: () => navigateTo(row.original.type === 'ldap' ? '/ldap' : '/authentication-servers'),
+        onClick: () => row.original.type === 'ldap' ? navigateTo('/ldap') : edit(row.original),
       }),
       h(UButton, { icon: 'i-lucide-pencil', color: 'neutral', variant: 'ghost', 'aria-label': 'Modifier', onClick: () => edit(row.original) }),
       h(UButton, { icon: 'i-lucide-trash-2', color: 'error', variant: 'ghost', 'aria-label': 'Supprimer', onClick: () => askDelete(row.original) }),
@@ -233,7 +273,7 @@ watch(totalPages, value => {
 
     <template #body>
       <div class="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        <UPageCard title="Serveurs configurés" description="Les serveurs utilisés pour authentifier les utilisateurs Rocket Mailer.">
+        <UPageCard title="Serveurs configurés" description="Les annuaires LDAP et les fournisseurs OpenID Connect utilisés pour authentifier les utilisateurs Rocket Mailer.">
           <UTable :data="data.member" :columns="columns" :loading="status === 'pending'" />
           <div v-if="!data.member.length && status !== 'pending'" class="py-8 text-center text-sm text-muted">
             Aucun serveur d’authentification configuré.
@@ -250,11 +290,14 @@ watch(totalPages, value => {
                 <UInput v-model="form.name" class="w-full" />
               </UFormField>
               <UFormField label="Type" required>
-                <USelect v-model="form.type" :items="[{ label: 'LDAP', value: 'ldap' }]" class="w-full" />
+                <USelect v-model="form.type" :items="[{ label: 'LDAP', value: 'ldap' }, { label: 'OpenID Connect', value: 'oidc' }]" class="w-full" :disabled="!!editing" />
               </UFormField>
-              <UFormField label="URL du serveur" required>
-                <UInput v-model="form.url" placeholder="ldap://annuaire.exemple.com:389" class="w-full font-mono" />
+              <UFormField :label="form.type === 'oidc' ? 'Émetteur (issuer)' : 'URL du serveur'" required>
+                <UInput v-model="form.url" :placeholder="form.type === 'oidc' ? 'https://auth.exemple.com' : 'ldap://annuaire.exemple.com:389'" class="w-full font-mono" />
               </UFormField>
+              <template v-if="form.type === 'oidc'">
+                <OidcServerFields v-model="form" :redirect-uri="redirectUri" :has-secret="editing?.hasClientSecret ?? false" />
+              </template>
               <USwitch v-model="form.enabled" label="Serveur activé" />
             </form>
           </template>
@@ -287,13 +330,21 @@ watch(totalPages, value => {
 
               <template v-if="wizardStep === 1">
                 <p class="text-sm text-muted">Choisissez le type de serveur à rechercher. Chaque connecteur pourra proposer sa propre méthode de détection.</p>
-                <button type="button" class="flex items-center gap-3 rounded border-2 border-primary bg-primary/5 p-4 text-start" @click="wizardType = 'ldap'">
+                <button type="button" class="flex items-center gap-3 rounded border-2 p-4 text-start" :class="wizardType === 'ldap' ? 'border-primary bg-primary/5' : 'border-default'" @click="wizardType = 'ldap'">
                   <UIcon name="i-lucide-network" class="size-6 text-primary" />
                   <span>
                     <span class="block font-medium">LDAP / Active Directory</span>
                     <span class="block text-sm text-muted">Annuaire d’entreprise pour l’authentification et la synchronisation.</span>
                   </span>
                   <UIcon v-if="wizardType === 'ldap'" name="i-lucide-circle-check" class="ms-auto size-5 text-primary" />
+                </button>
+                <button type="button" class="flex items-center gap-3 rounded border-2 p-4 text-start" :class="wizardType === 'oidc' ? 'border-primary bg-primary/5' : 'border-default'" data-testid="wizard-type-oidc" @click="wizardType = 'oidc'">
+                  <UIcon name="i-lucide-shield-check" class="size-6 text-primary" />
+                  <span>
+                    <span class="block font-medium">OpenID Connect (authentification unique)</span>
+                    <span class="block text-sm text-muted">Rocket Auth, Keycloak, Entra ID, Google… Les utilisateurs se connectent chez le fournisseur ; leur compte est créé à la première connexion.</span>
+                  </span>
+                  <UIcon v-if="wizardType === 'oidc'" name="i-lucide-circle-check" class="ms-auto size-5 text-primary" />
                 </button>
               </template>
 
@@ -313,6 +364,18 @@ watch(totalPages, value => {
                     </span>
                   </button>
                 </div>
+              </template>
+
+              <template v-else-if="wizardStep === 3 && wizardType === 'oidc'">
+                <form id="authentication-wizard-form" class="flex flex-col gap-3" @submit.prevent="testWizard">
+                  <UFormField label="Nom affiché sur la page de connexion" required>
+                    <UInput v-model="oidcForm.name" class="w-full" />
+                  </UFormField>
+                  <UFormField label="Émetteur (issuer)" required help="Son document de découverte est lu sur <émetteur>/.well-known/openid-configuration.">
+                    <UInput v-model="oidcForm.url" placeholder="https://auth.exemple.com" class="w-full font-mono" />
+                  </UFormField>
+                  <OidcServerFields v-model="oidcForm" :redirect-uri="redirectUri" :has-secret="false" />
+                </form>
               </template>
 
               <template v-else-if="wizardStep === 3">
@@ -349,7 +412,7 @@ watch(totalPages, value => {
           </template>
           <template #footer>
             <div class="flex w-full justify-between gap-2">
-              <UButton v-if="wizardStep > 1" label="Précédent" color="neutral" variant="ghost" @click="wizardStep--" />
+              <UButton v-if="wizardStep > 1" label="Précédent" color="neutral" variant="ghost" @click="previousStep" />
               <UButton v-else label="Fermer" color="neutral" variant="ghost" @click="wizardOpen = false" />
               <div class="flex gap-2">
                 <UButton v-if="wizardStep === 1" label="Continuer" icon="i-lucide-arrow-right" @click="startDiscovery" />
@@ -363,7 +426,7 @@ watch(totalPages, value => {
 
         <UModal :open="toDelete !== null" title="Supprimer le serveur ?" :description="toDelete ? `« ${toDelete.name} » sera supprimé.` : ''" @update:open="(value: boolean) => { if (!value) toDelete = null }">
           <template #body>
-            <USwitch v-if="toDelete?.type === 'ldap'" v-model="disableLinkedUsers" label="Désactiver les utilisateurs liés à ce serveur" />
+            <USwitch v-model="disableLinkedUsers" label="Désactiver les utilisateurs liés à ce serveur" />
           </template>
           <template #footer>
             <div class="flex w-full justify-end gap-2">

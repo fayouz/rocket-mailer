@@ -46,8 +46,8 @@ cd frontend && npm install && npm run dev            # NUXT_PUBLIC_API_BASE=http
 - **Tableau de bord** (page d'accueil) : envois et délivrabilité sur 30 jours, file d'envoi, intégrations, activité récente, état des services (base, file, SMTP, LDAP, stockage). Un utilisateur y voit ses propres chiffres ; un administrateur, toute la plateforme. API : `GET /api/dashboard`.
 - **Mes envois** et **Tous les envois** (admin) : recherche dans l'objet et les destinataires, filtres par statut, application, expéditeur et période, pagination. Les mêmes filtres existent dans l'API (`GET /api/emails?q=…&status=…`).
 
-### Utilisateurs et LDAP
-- Comptes **locaux** (mot de passe haché) ou **LDAP** (authentification par bind sur l'annuaire).
+### Utilisateurs, LDAP et authentification unique
+- Comptes **locaux** (mot de passe haché), **LDAP** (authentification par bind sur l'annuaire) ou **SSO** : connexion via un fournisseur **OpenID Connect** comme [Rocket Auth](https://github.com/fayouz/rocket-auth) (Administration → Serveurs d'authentification). Voir `docs/content/5.administration/8.sso.md`.
 - Synchronisation : `php bin/console app:ldap:sync [--dry-run]` (à planifier en cron) ou bouton « Synchroniser LDAP » (admin).
   Elle crée et met à jour les comptes et désactive ceux qui ont disparu de l'annuaire. Elle ne prend jamais le contrôle d'un compte local portant le même email.
 - `LDAP_ADMIN_GROUP_DN` : les membres de ce groupe (attribut `memberOf`) reçoivent `ROLE_ADMIN`. Vide : les admins sont gérés dans l'application.

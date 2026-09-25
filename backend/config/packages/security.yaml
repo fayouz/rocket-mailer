@@ -36,6 +36,7 @@ security:
     access_control:
         - { path: ^/api/auth/login$, roles: PUBLIC_ACCESS }
         - { path: ^/api/setup$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/(providers|oidc/callback)$, roles: PUBLIC_ACCESS }
         - { path: ^/api/docs, roles: PUBLIC_ACCESS }
         - { path: ^/api/embed/frame-policy$, roles: PUBLIC_ACCESS }
         - { path: ^/api/?$, roles: PUBLIC_ACCESS }

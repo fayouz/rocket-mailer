@@ -21,6 +21,7 @@ use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 
 /**
  * JSON login: local accounts are checked against their password hash, LDAP accounts by binding to the directory.
+ * OpenID Connect accounts cannot use it: see App\Controller\OidcController.
  */
 final class LoginAuthenticator extends AbstractAuthenticator
 {
@@ -60,6 +61,8 @@ final class LoginAuthenticator extends AbstractAuthenticator
                 return match ($user->getSource()) {
                     UserSource::Local => null !== $user->getPassword() && $this->hasher->isPasswordValid($user, $password),
                     UserSource::Ldap => $this->directory->checkCredentials((string) $user->getLdapDn(), $password),
+                    // Signs in through its OpenID Connect provider only (POST /api/auth/oidc/callback).
+                    UserSource::Oidc => false,
                 };
             }, $password),
         );

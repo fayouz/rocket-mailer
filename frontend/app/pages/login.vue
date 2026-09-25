@@ -8,15 +8,29 @@ const state = reactive({ email: '', password: '' })
 const error = ref<string | null>(null)
 const loading = ref(false)
 
+// Single sign-on providers (OpenID Connect servers enabled by an administrator).
+const { data: providers } = await useAsyncData('auth-providers', () => $fetch<{ providers: AuthProvider[] }>('/api/auth/providers', {
+  baseURL: useRuntimeConfig().public.apiBase,
+}).then(r => r.providers).catch(() => [] as AuthProvider[]), { default: () => [] as AuthProvider[] })
+const redirecting = ref<string | null>(null)
+
+function redirectTarget(): string {
+  return typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//')
+    ? route.query.redirect
+    : '/'
+}
+
+async function signInWith(provider: AuthProvider) {
+  redirecting.value = provider.id
+  await startOidcSignIn(provider, redirectTarget())
+}
+
 async function submit() {
   loading.value = true
   error.value = null
   try {
     await auth.login(state.email, state.password)
-    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//')
-      ? route.query.redirect
-      : '/'
-    await navigateTo(redirect)
+    await navigateTo(redirectTarget())
   }
   catch (e) {
     error.value = apiErrorMessage(e)
@@ -39,6 +53,21 @@ async function submit() {
           Connectez-vous avec votre compte local ou votre compte d'annuaire (LDAP).
         </p>
       </template>
+
+      <div v-if="providers.length" class="mb-4 flex flex-col gap-2">
+        <UButton
+          v-for="provider in providers"
+          :key="provider.id"
+          :label="`Se connecter avec ${provider.name}`"
+          icon="i-lucide-shield-check"
+          color="neutral"
+          variant="outline"
+          block
+          :loading="redirecting === provider.id"
+          @click="signInWith(provider)"
+        />
+        <USeparator label="ou" class="my-2" />
+      </div>
 
       <form class="flex flex-col gap-4" @submit.prevent="submit">
         <UFormField label="Email" required>

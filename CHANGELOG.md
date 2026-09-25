@@ -6,6 +6,13 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Authentification unique (OpenID Connect)** : nouveau type de serveur d'authentification, pour se connecter avec Rocket Auth ou tout fournisseur OpenID Connect :
+  - bouton **Se connecter avec …** sur la page de connexion, pour chaque fournisseur actif ;
+  - flux *authorization code* avec PKCE, `state` et `nonce`. L'API vérifie le jeton d'identité (signature RS256 via JWKS, émetteur, audience, expiration) ;
+  - comptes créés à la première connexion (source « SSO »), rôle administrateur piloté par la revendication `groups` (optionnel), rattachement des comptes existants seulement pour un fournisseur de confiance ;
+  - secret du client chiffré en base, URL interne pour les déploiements Docker, vérification du fournisseur par le worker et sur le tableau de bord ;
+  - API : `GET /api/auth/providers`, `POST /api/auth/oidc/callback`, `POST /api/authentication_servers/oidc/test`. Voir la documentation, *Administration → Authentification unique*.
+
 - **Santé des boîtes d'envoi et de l'annuaire LDAP** sur le tableau de bord :
   - le worker vérifie toutes les 5 minutes (Symfony Scheduler) chaque boîte active (connexion et authentification SMTP, IMAP si la copie est activée) et le serveur LDAP (authentification du compte de service, lecture de la base) ;
   - le tableau de bord affiche l'état de chaque boîte, l'erreur éventuelle et depuis quand un service est en échec ; bouton **Vérifier** pour relancer tout de suite ;

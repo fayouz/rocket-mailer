@@ -5,6 +5,7 @@ namespace App\Dashboard;
 use App\Entity\ServiceCheck;
 use App\Health\HealthChecker;
 use App\Ldap\LdapSettings;
+use App\Repository\AuthenticationServerRepository;
 use App\Repository\MailboxRepository;
 use App\Repository\ServiceCheckRepository;
 use Doctrine\DBAL\Connection;
@@ -35,6 +36,7 @@ final class PlatformHealth
         #[Autowire(env: 'resolve:ATTACHMENTS_DIR')] private readonly string $attachmentsDir,
         private readonly ServiceCheckRepository $checks,
         private readonly MailboxRepository $mailboxes,
+        private readonly AuthenticationServerRepository $servers,
     ) {
     }
 
@@ -52,6 +54,9 @@ final class PlatformHealth
             $services[] = $this->mailboxes($checks);
         }
         $services[] = $this->ldap($databaseUp, $checks['ldap'] ?? null);
+        if ($databaseUp) {
+            $services[] = $this->sso($checks);
+        }
         $services[] = $this->storage();
 
         $statuses = array_column($services, 'status');
@@ -206,6 +211,57 @@ final class PlatformHealth
                 [] !== $failing => \sprintf('%d sur %d en échec : %s', \count($failing), $total, implode(', ', $failing)),
                 $unchecked === $total => 'Pas encore vérifiées',
                 default => \sprintf('%d boîte(s) joignable(s), SMTP et IMAP', $total),
+            },
+            'total' => $total,
+            'failing' => \count($failing),
+            'items' => $items,
+        ];
+    }
+
+    /**
+     * OpenID Connect providers: last check of each enabled one.
+     *
+     * @param array<string, ServiceCheck> $checks
+     *
+     * @return array<string, mixed>
+     */
+    private function sso(array $checks): array
+    {
+        $items = [];
+        $failing = [];
+        foreach ($this->servers->findEnabledOidc() as $server) {
+            $check = $checks[HealthChecker::oidcCheckId($server)] ?? null;
+            if (null !== $check && !$check->isOk()) {
+                $failing[] = $server->getName().' ('.$check->getDetail().')';
+            }
+            $items[] = [
+                'id' => (string) $server->getId(),
+                'name' => $server->getName(),
+                'url' => $server->getUrl(),
+                'status' => null === $check ? self::UNKNOWN : ($check->isOk() ? self::OPERATIONAL : self::DOWN),
+                'check' => $check?->toArray(),
+            ];
+        }
+
+        $total = \count($items);
+        if (0 === $total) {
+            return ['id' => 'sso', 'label' => 'Authentification unique (OpenID Connect)', 'status' => 'disabled', 'detail' => 'Aucun fournisseur actif', 'items' => []];
+        }
+        $unchecked = \count(array_filter($items, static fn (array $item) => self::UNKNOWN === $item['status']));
+
+        return [
+            'id' => 'sso',
+            'label' => 'Authentification unique (OpenID Connect)',
+            'status' => match (true) {
+                \count($failing) === $total => self::DOWN,
+                [] !== $failing => self::DEGRADED,
+                $unchecked === $total => self::UNKNOWN,
+                default => self::OPERATIONAL,
+            },
+            'detail' => match (true) {
+                [] !== $failing => \sprintf('%d sur %d en échec : %s', \count($failing), $total, implode(', ', $failing)),
+                $unchecked === $total => 'Pas encore vérifié',
+                default => implode(', ', array_column($items, 'name')),
             },
             'total' => $total,
             'failing' => \count($failing),

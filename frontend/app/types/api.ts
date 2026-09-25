@@ -15,7 +15,7 @@ export interface UserSummary {
 
 export interface User extends UserSummary, Tracked {
   roles: string[]
-  source: 'local' | 'ldap'
+  source: 'local' | 'ldap' | 'oidc'
   authenticationServerName: string | null
   ldapDn: string | null
   ldapSyncedAt: string | null
@@ -217,7 +217,7 @@ export interface MailboxHealth {
 }
 
 export interface ServiceHealth {
-  id: 'database' | 'queue' | 'mailer' | 'mailboxes' | 'ldap' | 'storage'
+  id: 'database' | 'queue' | 'mailer' | 'mailboxes' | 'ldap' | 'sso' | 'storage'
   label: string
   status: ServiceStatus
   detail: string
@@ -297,9 +297,27 @@ export interface Collection<T> {
 export interface AuthenticationServer extends Tracked {
   id: string
   name: string
-  type: 'ldap'
+  type: 'ldap' | 'oidc'
   enabled: boolean
+  /** LDAP: directory URL. OpenID Connect: issuer. */
   url: string
+  /** OpenID Connect: URL used by the API to reach the issuer (empty: the issuer itself). */
+  internalUrl: string
+  clientId: string
+  hasClientSecret: boolean
+  scopes: string
+  /** LDAP: administrators group DN. OpenID Connect: value of the "groups" claim granting the administrator role. */
+  adminGroupDn: string
+  linkExistingAccounts: boolean
+}
+
+/** POST /api/authentication_servers/oidc/test */
+export interface OidcTestResult {
+  ok: boolean
+  message: string
+  issuer?: string
+  authorizationEndpoint?: string
+  scopesSupported?: string[]
 }
 
 export interface AuthenticationServerDiscoveryCandidate {

@@ -22,6 +22,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: '`user`')]
+#[ORM\UniqueConstraint(name: 'uniq_user_external_id', columns: ['authentication_server_id', 'external_id'])]
 #[UniqueEntity('email')]
 #[ApiResource(
     operations: [
@@ -80,6 +81,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?AuthenticationServer $authenticationServer = null;
+
+    /** OpenID Connect: subject ("sub" claim) of the account at its authentication server. */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $externalId = null;
 
     #[ORM\Column(nullable: true)]
     #[Groups(['user:read'])]
@@ -249,6 +254,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setEnabled(bool $enabled): static
     {
         $this->enabled = $enabled;
+
+        return $this;
+    }
+
+    public function getExternalId(): ?string
+    {
+        return $this->externalId;
+    }
+
+    public function setExternalId(?string $externalId): static
+    {
+        $this->externalId = $externalId;
 
         return $this;
     }

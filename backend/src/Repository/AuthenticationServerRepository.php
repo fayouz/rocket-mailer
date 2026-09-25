@@ -19,4 +19,10 @@ class AuthenticationServerRepository extends ServiceEntityRepository
     {
         return $this->findOneBy(['type' => AuthenticationServerType::Ldap], ['createdAt' => 'ASC']);
     }
+
+    /** @return list<AuthenticationServer> */
+    public function findEnabledOidc(): array
+    {
+        return $this->findBy(['type' => AuthenticationServerType::Oidc, 'enabled' => true], ['name' => 'ASC']);
+    }
 }

@@ -7,6 +7,9 @@ use App\Entity\ServiceCheck;
 use App\Ldap\LdapSettings;
 use App\Ldap\UserDirectoryInterface;
 use App\Mailbox\MailboxConnector;
+use App\Entity\AuthenticationServer;
+use App\Oidc\OidcClient;
+use App\Repository\AuthenticationServerRepository;
 use App\Repository\MailboxRepository;
 use App\Repository\ServiceCheckRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -14,7 +17,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Lock\LockFactory;
 
 /**
- * Network checks of the LDAP server and of the enabled sending mailboxes (SMTP, and IMAP when the copy is on).
+ * Network checks of the LDAP server, of the OpenID Connect providers (discovery document) and of the enabled sending mailboxes (SMTP, and IMAP when the copy is on).
  * Run by the scheduler every 5 minutes, or on demand from the dashboard; results kept in ServiceCheck.
  */
 class HealthChecker
@@ -28,7 +31,14 @@ class HealthChecker
         private readonly EntityManagerInterface $em,
         private readonly ClockInterface $clock,
         private readonly LockFactory $locks,
+        private readonly AuthenticationServerRepository $servers,
+        private readonly OidcClient $oidc,
     ) {
+    }
+
+    public static function oidcCheckId(AuthenticationServer $server): string
+    {
+        return \sprintf('oidc:%s', $server->getId());
     }
 
     public static function mailboxCheckId(Mailbox $mailbox, string $protocol): string
@@ -56,6 +66,16 @@ class HealthChecker
                     $this->record($existing, $seen, 'ldap', true, 'Connexion et authentification réussies', $start);
                 } catch (\Throwable $e) {
                     $this->record($existing, $seen, 'ldap', false, $e->getMessage(), $start);
+                }
+            }
+
+            foreach ($this->servers->findEnabledOidc() as $server) {
+                $start = hrtime(true);
+                try {
+                    $metadata = $this->oidc->discover($server, fresh: true);
+                    $this->record($existing, $seen, self::oidcCheckId($server), true, 'Fournisseur joignable : '.$metadata['issuer'], $start);
+                } catch (\Throwable $e) {
+                    $this->record($existing, $seen, self::oidcCheckId($server), false, $e->getMessage(), $start);
                 }
             }
 

@@ -194,7 +194,8 @@ function serviceMetric(service: NonNullable<Dashboard['health']['services']>[num
     case 'ldap': return service.check?.checkedAt
       ? `Vérifié ${timeAgo(service.check.checkedAt, now.value)}${service.latencyMs ? ` · ${service.latencyMs} ms` : ''}`
       : service.lastSyncAt ? `Synchro ${timeAgo(service.lastSyncAt, now.value)}` : null
-    case 'mailboxes': return service.total ? `${service.total - (service.failing ?? 0)}/${service.total} OK` : null
+    case 'mailboxes':
+    case 'sso': return service.total ? `${service.total - (service.failing ?? 0)}/${service.total} OK` : null
     case 'storage': return service.freeBytes ? `${formatSize(service.freeBytes)} libres` : null
     default: return null
   }

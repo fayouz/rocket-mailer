@@ -46,7 +46,13 @@ const columns: TableColumn<User>[] = [
   {
     accessorKey: 'source',
     header: 'Source',
-    cell: ({ row }) => h(UBadge, { variant: 'subtle', color: row.original.source === 'ldap' ? 'info' : 'neutral', label: row.original.source === 'ldap' ? (row.original.authenticationServerName ?? 'LDAP') : 'Local' }),
+    cell: ({ row }) => h(UBadge, {
+      variant: 'subtle',
+      color: row.original.source === 'ldap' ? 'info' : row.original.source === 'oidc' ? 'primary' : 'neutral',
+      label: row.original.source === 'ldap'
+        ? (row.original.authenticationServerName ?? 'LDAP')
+        : row.original.source === 'oidc' ? (row.original.authenticationServerName ?? 'SSO') : 'Local',
+    }),
   },
   {
     id: 'admin',

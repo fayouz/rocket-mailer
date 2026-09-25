@@ -4,6 +4,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // Public redirects to the documentation site (docs and changelog).
   if (to.path === '/changelog' || to.path === '/docs' || to.path.startsWith('/docs/')) return
 
+  // End of a single sign-on: the page completes it itself.
+  if (to.path === '/auth/callback') return
+
   const auth = useAuth()
 
   // First run: until an administrator exists, every page leads to the setup.
