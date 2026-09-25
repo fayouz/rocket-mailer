@@ -30,7 +30,9 @@ export function rocketMailerFetch<T>(path: string, options: { method?: 'GET' | '
   })
 }
 
-export interface RocketMailerSendInput extends Omit<RocketMailerDraft, 'template' | 'attachments'> {
+export interface RocketMailerSendInput extends Omit<RocketMailerDraft, 'template' | 'attachments' | 'mailbox'> {
+  /** Sending mailbox IRI (/api/mailboxes/<id>) or id. */
+  mailbox?: string
   to: string[]
   /** Template IRI (/api/email_templates/<id>) or id. */
   template?: string
@@ -47,6 +49,7 @@ export function sendRocketMailerEmail(actAs: string, input: RocketMailerSendInpu
     body: {
       ...input,
       template: input.template ? iri('email_templates', input.template) : undefined,
+      mailbox: input.mailbox ? iri('mailboxes', input.mailbox) : undefined,
       attachments: input.attachments?.map(id => iri('attachments', id)),
     },
   })

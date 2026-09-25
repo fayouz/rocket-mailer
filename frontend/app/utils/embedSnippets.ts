@@ -2,6 +2,8 @@
 
 export interface EmbedDraft {
   from?: string | null
+  /** Sending mailbox id. */
+  mailbox?: string | null
   to?: string[]
   cc?: string[]
   bcc?: string[]
@@ -35,7 +37,8 @@ export function nestVariables(flat: Record<string, string>): Record<string, unkn
 /** Only the fields that are set, in a stable order. */
 export function cleanDraft(draft: EmbedDraft): EmbedDraft {
   const clean: EmbedDraft = {}
-  if (draft.from) clean.from = draft.from
+  if (draft.mailbox) clean.mailbox = draft.mailbox
+  else if (draft.from) clean.from = draft.from
   for (const field of ['to', 'cc', 'bcc'] as const) {
     if (draft[field]?.length) clean[field] = draft[field]
   }

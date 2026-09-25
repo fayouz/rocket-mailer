@@ -79,7 +79,43 @@ export interface SenderOption {
   email: string
   name: string | null
   default: boolean
-  source: 'settings' | 'personal' | 'application'
+  source: 'settings' | 'personal' | 'application' | 'mailbox'
+  /** IRI of the sending mailbox (source "mailbox"). */
+  mailbox?: string
+  mailboxName?: string
+}
+
+export type MailEncryption = 'ssl' | 'starttls' | 'none'
+
+/** A sending mailbox: its own SMTP server (or provider DSN) and an IMAP "Sent" folder. */
+export interface Mailbox extends Tracked {
+  id: string
+  name: string
+  email: string
+  displayName: string | null
+  transport: 'smtp' | 'dsn'
+  smtpHost: string | null
+  smtpPort: number | null
+  smtpEncryption: MailEncryption
+  smtpUsername: string | null
+  hasSmtpPassword: boolean
+  dsnHint: string | null
+  imapEnabled: boolean
+  imapHost: string | null
+  imapPort: number | null
+  imapEncryption: MailEncryption
+  imapUsername: string | null
+  hasImapPassword: boolean
+  imapSentFolder: string | null
+  availableToUsers: boolean
+  enabled: boolean
+  /** Application IRIs. */
+  applications: string[]
+}
+
+export interface MailboxTestResult {
+  smtp: { ok: boolean, message: string }
+  imap: { ok: boolean, message: string, sentFolder?: string } | null
 }
 
 export interface SenderAddress extends Tracked {
@@ -116,6 +152,11 @@ export interface Email extends Tracked {
   status: EmailStatus
   errorMessage?: string | null
   sentAt: string | null
+  /** Sending mailbox, if any. */
+  mailboxName?: string | null
+  /** IMAP folder of the mailbox holding the copy. */
+  archivedIn?: string | null
+  archiveError?: string | null
   attachmentCount: number
   attachments?: Attachment[]
 }
@@ -123,6 +164,8 @@ export interface Email extends Tracked {
 export interface EmailDraft {
   /** "Name <email>" or "email"; empty = default sender. */
   from: string | null
+  /** Sending mailbox (id or IRI), instead of "from". */
+  mailbox?: string | null
   to: string[]
   cc: string[]
   bcc: string[]

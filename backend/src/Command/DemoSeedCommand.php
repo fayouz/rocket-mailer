@@ -4,6 +4,9 @@ namespace App\Command;
 
 use App\Entity\Application;
 use App\Entity\EmailTemplate;
+use App\Entity\Mailbox;
+use App\Mailbox\SecretBox;
+use App\Repository\MailboxRepository;
 use App\Entity\User;
 use App\Repository\ApplicationRepository;
 use App\Repository\EmailTemplateRepository;
@@ -39,6 +42,10 @@ final class DemoSeedCommand
         #[Autowire(env: 'bool:DEMO_MODE')] private readonly bool $demoMode,
         #[Autowire(env: 'DEMO_APP_TOKEN')] private readonly string $demoAppToken,
         #[Autowire(env: 'DEMO_HOST_ORIGIN')] private readonly string $demoHostOrigin,
+        private readonly MailboxRepository $mailboxes,
+        private readonly SecretBox $secrets,
+        #[Autowire(env: 'DEMO_MAILBOX_SMTP')] private readonly string $demoMailboxSmtp,
+        #[Autowire(env: 'DEMO_MAILBOX_IMAP')] private readonly string $demoMailboxImap,
     ) {
     }
 
@@ -72,6 +79,22 @@ final class DemoSeedCommand
             ->setEnabled(true);
         $application->useToken($this->demoAppToken);
         $this->em->persist($application);
+
+        // Sending mailbox of the CRM: SMTP through Mailpit (to see the emails), copy in GreenMail's IMAP "Sent" folder.
+        if ('' !== $this->demoMailboxSmtp && null === $this->mailboxes->findOneBy(['email' => 'commercial@crm.example.org'])) {
+            [$smtpHost, $smtpPort] = explode(':', $this->demoMailboxSmtp) + [1 => '1025'];
+            [$imapHost, $imapPort] = explode(':', $this->demoMailboxImap) + [1 => '3143'];
+            $mailbox = (new Mailbox())
+                ->setName('Boîte commerciale du CRM')
+                ->setEmail('commercial@crm.example.org')
+                ->setDisplayName('Service commercial')
+                ->setSmtpHost($smtpHost)->setSmtpPort((int) $smtpPort)->setSmtpEncryption('none')
+                ->setImapEnabled('' !== $imapHost)->setImapHost($imapHost ?: null)->setImapPort((int) $imapPort)->setImapEncryption('none')
+                ->setImapUsername('commercial')->setImapPassword('secret-pass')
+                ->addApplication($application);
+            $mailbox->sealSecrets($this->secrets->encrypt(...));
+            $this->em->persist($mailbox);
+        }
 
         foreach ($this->templateFixtures() as [$name, $description, $subject, $html, $variables]) {
             $template = $this->templates->findOneBy(['name' => $name]) ?? new EmailTemplate();

@@ -6,6 +6,16 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Boîtes d'envoi** (Administration → Boîtes d'envoi) : de vrais comptes email depuis lesquels envoyer.
+  - Envoi par leur serveur SMTP, ou par un fournisseur (API) : Brevo, Amazon SES, Mailjet, SendGrid, Postmark, Mailgun.
+  - Copie de chaque email dans leur dossier « Envoyés » par IMAP : dossier détecté, ou créé s'il manque.
+  - Configurations types : Gmail, Microsoft 365, OVHcloud, Infomaniak. Bouton « Tester la connexion » et envoi d'un email de test.
+  - Mots de passe et DSN chiffrés en base (`MAILBOX_ENCRYPTION_KEY`), jamais renvoyés par l'API.
+  - Rattachées aux applications : le composeur de l'application les propose dans la liste « De », à côté des adresses d'envoi. Une boîte peut aussi être ouverte à tous les utilisateurs.
+  - API et widget : `mailbox` dans `POST /api/emails` et `setDraft()`, ou un `from` égal à l'adresse de la boîte. Clients Nuxt et Symfony mis à jour.
+  - Historique : boîte utilisée, dossier de la copie, erreur de copie (l'email reste envoyé).
+  - Démo : la « Boîte commerciale du CRM », avec un serveur IMAP de test (GreenMail).
+
 - **Configuration initiale** : au premier lancement, tant qu'aucun compte n'existe, toutes les pages mènent à un formulaire de création du compte administrateur (email, nom, mot de passe). Il connecte ensuite l'administrateur et le guide vers les Réglages. `SETUP_TOKEN` (optionnel) protège cette étape sur une instance exposée. API : `GET` et `POST /api/setup`.
 
 - **Variables de template** : `{{ client.prenom }}`, `{{ devis.numero }}`…

@@ -5,6 +5,7 @@ namespace App\Sender;
 use App\Entity\Application;
 use App\Entity\SenderAddress;
 use App\Entity\User;
+use App\Repository\MailboxRepository;
 use App\Repository\SenderAddressRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -15,12 +16,14 @@ use Symfony\Component\Mime\Address;
  * Decides which "From" addresses a user may send from:
  * - the sender addresses of the settings (one is the default, seeded from MAILER_DEFAULT_FROM at install);
  * - the user's own address, unless disabled in the settings;
- * - when sending through an application, any address matching that application's allowed senders.
+ * - when sending through an application, any address matching that application's allowed senders;
+ * - the sending mailboxes of that application, and those available to all users (see Mailbox).
  */
 final class SenderPolicy
 {
     public function __construct(
         private readonly SenderAddressRepository $senders,
+        private readonly MailboxRepository $mailboxes,
         private readonly Settings $settings,
         private readonly EntityManagerInterface $em,
         #[Autowire(env: 'MAILER_DEFAULT_FROM')] private readonly string $installDefault,
@@ -30,9 +33,9 @@ final class SenderPolicy
     /**
      * Addresses offered in the composer, the default first.
      *
-     * @return list<array{from: string, email: string, name: string|null, default: bool, source: 'settings'|'personal'}>
+     * @return list<array{from: string, email: string, name: string|null, default: bool, source: 'settings'|'personal'|'mailbox', mailbox?: string, mailboxName?: string}>
      */
-    public function options(User $user): array
+    public function options(User $user, ?Application $application = null): array
     {
         $options = array_map(static fn (SenderAddress $sender) => [
             'from' => AddressFormatter::format($sender->toAddress()),
@@ -54,6 +57,19 @@ final class SenderPolicy
         }
 
         usort($options, static fn (array $a, array $b) => $b['default'] <=> $a['default']);
+
+        // Sending mailboxes of the application (and those shared with all users), after the addresses.
+        foreach ($this->mailboxes->usableBy($application) as $mailbox) {
+            $options[] = [
+                'from' => AddressFormatter::format($mailbox->toAddress()),
+                'email' => $mailbox->getEmail(),
+                'name' => $mailbox->getDisplayName(),
+                'default' => false,
+                'source' => 'mailbox',
+                'mailbox' => '/api/mailboxes/'.$mailbox->getId()->toRfc4122(),
+                'mailboxName' => $mailbox->getName(),
+            ];
+        }
 
         return $options;
     }

@@ -55,6 +55,10 @@ final class DemoSeedCommandTest extends WebTestCase
             false,
             self::DEMO_TOKEN,
             'http://localhost:4000',
+            $container->get(\App\Repository\MailboxRepository::class),
+            $container->get(\App\Mailbox\SecretBox::class),
+            '',
+            '',
         );
 
         $io = new \Symfony\Component\Console\Style\SymfonyStyle(new \Symfony\Component\Console\Input\ArrayInput([]), new \Symfony\Component\Console\Output\NullOutput());

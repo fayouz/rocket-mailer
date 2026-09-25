@@ -4,6 +4,8 @@ import type { H3Event } from 'h3'
 export interface RocketMailerDraft {
   /** "Name <email>": must be offered to the user or allowed for your application. */
   from?: string
+  /** Sending mailbox attached to your application (id or IRI), instead of "from". */
+  mailbox?: string
   to?: string[]
   cc?: string[]
   bcc?: string[]
