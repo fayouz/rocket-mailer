@@ -6,6 +6,12 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Version et mises à jour** :
+  - la version installée s'affiche en bas du menu ; les administrateurs voient un badge **Nouveau** quand une version plus récente est publiée ;
+  - page Administration → **Mises à jour** : version installée, dernière version publiée sur GitHub avec ses notes, et bouton **Mettre à jour** ;
+  - le bouton passe par le service optionnel `updater` (Watchtower, profil `updater`) : il télécharge les nouvelles images, redémarre les services, puis la page se recharge sur la nouvelle version. Sans lui, la page donne les commandes à lancer ;
+  - les images Docker portent leur version (`git describe --tags`). Nouvelles variables : `UPDATE_REPOSITORY`, `UPDATER_URL`, `UPDATER_TOKEN`. API : `GET /api/system/version`, `GET` et `POST /api/system/update`.
+
 - **Layouts d'email** (Administration → Layouts d'email) : une enveloppe HTML commune (en-tête, pied de page, charte) avec l'emplacement `{{ content }}`.
   - Deux modèles de départ et un aperçu avec un contenu d'exemple.
   - Chaque template choisit son layout (ou aucun), avec un bouton **Aperçu** ; le choix est versionné.

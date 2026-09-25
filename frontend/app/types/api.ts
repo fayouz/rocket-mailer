@@ -292,3 +292,31 @@ export interface LdapTestResult {
   count: number
   sample: { dn: string, email: string, firstName: string | null, lastName: string | null, admin: boolean | null }[]
 }
+
+/** GET /api/system/version */
+export interface AppVersionInfo {
+  /** "0.7.0", "0.7.0+3 (abc1234)" (commits after a release), or "dev" / a branch name. */
+  version: string
+  release: string | null
+}
+
+export interface ReleaseInfo {
+  version: string
+  name: string
+  url: string
+  publishedAt: string | null
+  /** Release notes (Markdown). */
+  notes: string | null
+}
+
+/** GET /api/system/update (administrators) */
+export interface UpdateStatus {
+  current: AppVersionInfo & { raw: string }
+  latest: ReleaseInfo | null
+  /** null: this build has no version number to compare (development build, branch image). */
+  updateAvailable: boolean | null
+  checkEnabled: boolean
+  repositoryUrl: string | null
+  error: string | null
+  updater: { configured: boolean }
+}

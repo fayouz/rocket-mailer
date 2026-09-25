@@ -103,6 +103,10 @@ Sécurité du composeur embarqué :
 - À l'installation, `MAILER_DEFAULT_FROM="Nom <adresse>"` crée l'adresse par défaut. On la gère ensuite dans les Réglages.
 - Une application peut imposer l'adresse à la volée, avec `setDraft({ from })` ou le champ `from` de l'API, dans la limite de ses **adresses d'expédition autorisées** (`contact@…` ou `*@domaine`). Toute autre adresse est refusée. Les réponses reviennent à l'utilisateur (`Reply-To`).
 
+### Version et mises à jour
+- Version affichée en bas du menu (`git describe --tags`, inscrite dans les images par la CI). Administration → **Mises à jour** la compare aux versions publiées sur GitHub (`UPDATE_REPOSITORY`).
+- Bouton **Mettre à jour** avec le service optionnel `updater` (Watchtower) : `UPDATER_TOKEN=… docker compose --profile updater up -d`, avec les images ghcr.io (`API_IMAGE`, `FRONT_IMAGE`).
+
 ### Boîtes d'envoi
 - Administration → **Boîtes d'envoi** : de vrais comptes email (SMTP, ou fournisseur par DSN : Brevo, SES, Mailjet, SendGrid, Postmark, Mailgun), avec copie de chaque email dans leur dossier « Envoyés » par IMAP.
 - Rattachées à des applications, elles apparaissent dans la liste « De » de leur composeur (ou pour tous les utilisateurs). API : `mailbox` dans `POST /api/emails` ; widget : `setDraft({ mailbox })`.

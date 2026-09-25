@@ -19,6 +19,11 @@ parameters:
     env(SETUP_TOKEN): ''
     env(MAILBOX_ENCRYPTION_KEY): ''
     env(MAILBOX_TIMEOUT): '15'
+    # Update check (GitHub releases of this repository; empty: disabled) and one-click update (Watchtower HTTP API).
+    env(APP_VERSION): ''
+    env(UPDATE_REPOSITORY): 'fayouz/rocket-mailer'
+    env(UPDATER_URL): ''
+    env(UPDATER_TOKEN): ''
     env(DEMO_MODE): '0'
     env(DEMO_APP_TOKEN): ''
     env(DEMO_HOST_ORIGIN): 'http://localhost:4000'
@@ -32,3 +37,7 @@ services:
 
     App\:
         resource: '../src/'
+
+when@test:
+    services:
+        App\Tests\Support\HttpMock: ~

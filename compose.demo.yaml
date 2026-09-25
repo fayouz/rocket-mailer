@@ -30,7 +30,10 @@ services:
   # One-shot: schema, demo data, then LDAP synchronization (retried while the directory boots).
   demo-seed:
     image: ${API_IMAGE:-rocket-mailer-api}
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     environment:
       <<: *demo-env
       APP_ENV: prod
