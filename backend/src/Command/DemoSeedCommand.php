@@ -3,9 +3,11 @@
 namespace App\Command;
 
 use App\Entity\Application;
+use App\Entity\EmailLayout;
 use App\Entity\EmailTemplate;
 use App\Entity\Mailbox;
 use App\Mailbox\SecretBox;
+use App\Repository\EmailLayoutRepository;
 use App\Repository\MailboxRepository;
 use App\Entity\User;
 use App\Repository\ApplicationRepository;
@@ -43,6 +45,7 @@ final class DemoSeedCommand
         #[Autowire(env: 'DEMO_APP_TOKEN')] private readonly string $demoAppToken,
         #[Autowire(env: 'DEMO_HOST_ORIGIN')] private readonly string $demoHostOrigin,
         private readonly MailboxRepository $mailboxes,
+        private readonly EmailLayoutRepository $layouts,
         private readonly SecretBox $secrets,
         #[Autowire(env: 'DEMO_MAILBOX_SMTP')] private readonly string $demoMailboxSmtp,
         #[Autowire(env: 'DEMO_MAILBOX_IMAP')] private readonly string $demoMailboxImap,
@@ -105,6 +108,38 @@ final class DemoSeedCommand
                     ->setHtml($html)->setVariables($variables)->setShared(true)->setOwner($template->getOwner() ?? $admin);
                 $this->em->persist($template);
             }
+        }
+
+        // A layout (the CRM's letterhead) and a template that only holds its content.
+        $layout = $this->layouts->findOneBy(['name' => 'Charte Démo CRM']);
+        if (null === $layout) {
+            $layout = (new EmailLayout())->setName('Charte Démo CRM')->setDescription('En-tête et pied de page de Démo CRM.')->setHtml(<<<'HTML'
+                <!doctype html>
+                <html lang="fr"><head><meta charset="utf-8"></head>
+                <body style="margin:0;background:#eef2ff;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2ff;padding:32px 0;">
+                    <tr><td align="center">
+                      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#1e1b4b;">
+                        <tr><td style="background:#4338ca;padding:24px 32px;color:#ffffff;font-size:20px;font-weight:bold;">Démo CRM</td></tr>
+                        <tr><td style="padding:32px;font-size:15px;line-height:1.6;">{{ content }}</td></tr>
+                        <tr><td style="padding:16px 32px;border-top:1px solid #e0e7ff;color:#6366f1;font-size:12px;">Démo CRM · 1 rue de l'Exemple, 75000 Paris</td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+                </body></html>
+                HTML);
+            $this->em->persist($layout);
+        }
+        if (null === $this->templates->findOneBy(['name' => 'Confirmation de rendez-vous'])) {
+            $this->em->persist((new EmailTemplate())
+                ->setName('Confirmation de rendez-vous')
+                ->setDescription('Utilise le layout « Charte Démo CRM ». Variables : client, date du rendez-vous.')
+                ->setDefaultSubject('Votre rendez-vous du {{ rdv.date }}')
+                ->setHtml('<p>Bonjour {{ client.prenom }},</p><p>Nous vous confirmons notre rendez-vous du <strong>{{ rdv.date }}</strong>.</p><p>À bientôt,<br>L’équipe commerciale</p>')
+                ->setVariables([['name' => 'client.prenom', 'label' => 'Prénom du client'], ['name' => 'rdv.date', 'label' => 'Date du rendez-vous']])
+                ->setLayout($layout)
+                ->setShared(true)
+                ->setOwner($admin));
         }
 
         $this->em->flush();

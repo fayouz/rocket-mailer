@@ -4,7 +4,7 @@ namespace App\Entity;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Gedmo\Loggable\Entity\Repository\LogEntryRepository;
+use App\Repository\EmailTemplateVersionRepository;
 use Gedmo\Loggable\LogEntryInterface;
 
 /**
@@ -13,7 +13,7 @@ use Gedmo\Loggable\LogEntryInterface;
  *
  * @implements LogEntryInterface<EmailTemplate>
  */
-#[ORM\Entity(repositoryClass: LogEntryRepository::class)]
+#[ORM\Entity(repositoryClass: EmailTemplateVersionRepository::class)]
 #[ORM\Table(name: 'email_template_version')]
 #[ORM\Index(name: 'email_template_version_lookup_idx', columns: ['object_class', 'object_id', 'version'])]
 class EmailTemplateVersion implements LogEntryInterface

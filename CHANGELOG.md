@@ -6,6 +6,12 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Layouts d'email** (Administration → Layouts d'email) : une enveloppe HTML commune (en-tête, pied de page, charte) avec l'emplacement `{{ content }}`.
+  - Deux modèles de départ et un aperçu avec un contenu d'exemple.
+  - Chaque template choisit son layout (ou aucun), avec un bouton **Aperçu** ; le choix est versionné.
+  - Le composeur importe le HTML final, et l'API l'utilise pour un envoi par template. `GET /api/email_templates/{id}` renvoie `layout` et `renderedHtml`.
+  - Démo : le layout « Charte Démo CRM » et le template « Confirmation de rendez-vous ».
+
 - **Configuration LDAP dans l'administration** (Administration → Annuaire LDAP) :
   - URL, STARTTLS, base de recherche, compte de service, filtre, groupe des administrateurs et correspondance des attributs (utile pour Active Directory) ;
   - stockée en base, avec le mot de passe du compte de service chiffré, et appliquée sans redémarrage ;

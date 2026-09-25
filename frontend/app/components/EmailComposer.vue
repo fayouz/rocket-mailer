@@ -154,7 +154,8 @@ function onTemplatePicked(template: EmailTemplate) {
 }
 
 function applyTemplate(template: EmailTemplate) {
-  draft.htmlBody = template.html
+  // The content in its layout, as computed by the API.
+  draft.htmlBody = template.renderedHtml ?? template.html
   draft.template = `/api/email_templates/${template.id}`
   templateName.value = template.name
   if (!draft.subject.trim() && template.defaultSubject) draft.subject = template.defaultSubject

@@ -50,11 +50,20 @@ export interface TemplateVariable {
   used?: boolean
 }
 
+/** HTML layout around templates, with the {{ content }} slot. */
+export interface EmailLayout extends Tracked {
+  id: string
+  name: string
+  description: string | null
+  html: string
+}
+
 export interface EmailTemplateSummary extends Tracked {
   id: string
   name: string
   description: string | null
   variables: TemplateVariable[]
+  layout: { '@id': string, 'id': string, 'name': string } | null
   defaultSubject: string | null
   shared: boolean
   owner: UserSummary
@@ -62,6 +71,8 @@ export interface EmailTemplateSummary extends Tracked {
 
 export interface EmailTemplate extends EmailTemplateSummary {
   html: string
+  /** The content in its layout: what the composer imports and what is sent. */
+  renderedHtml: string
   projectData: Record<string, unknown> | null
 }
 

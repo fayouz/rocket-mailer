@@ -132,7 +132,7 @@ final class EmailSendProcessor implements ProcessorInterface
         $template = $email->getTemplate();
         if (null !== $template) {
             if ('' === trim($email->getHtmlBody())) {
-                $email->setHtmlBody($template->getHtml());
+                $email->setHtmlBody($template->getRenderedHtml());
             }
             if ('' === trim($email->getSubject())) {
                 $email->setSubject($template->getDefaultSubject() ?? '');
