@@ -77,7 +77,7 @@ final class LdapDirectory implements AuthenticationConnectorInterface
     {
         $ldap = $this->connect($config, networkTimeout: self::PING_TIMEOUT);
         $ldap->bind('' === $config->bindDn ? null : $config->bindDn, '' === $config->bindPassword ? null : $config->bindPassword);
-        $ldap->query($config->baseDn, '(objectClass=*)', ['scope' => 'base', 'sizeLimit' => 1, 'timeout' => self::PING_TIMEOUT])->execute()->count();
+        $ldap->query($config->baseDn, '(objectClass=*)', ['scope' => 'base', 'maxItems' => 1, 'timeout' => self::PING_TIMEOUT])->execute()->count();
     }
 
     /** @return iterable<DirectoryUser> */

@@ -135,4 +135,25 @@ final class LdapUserSynchronizerTest extends KernelTestCase
         self::assertFalse($directory->checkCredentials('uid=alice,dc=ex', ''));
         self::assertFalse($directory->checkCredentials('', 'secret'));
     }
+
+    public function testPingFailsOnTheConnectionNotOnItsOptions(): void
+    {
+        if (!\extension_loaded('ldap')) {
+            self::markTestSkipped('The ldap extension is required.');
+        }
+        $settings = new class extends \App\Ldap\LdapSettings {
+            public function __construct()
+            {
+            }
+
+            public function get(): \App\Ldap\LdapConfig
+            {
+                return new \App\Ldap\LdapConfig(enabled: true, url: 'ldap://127.0.0.1:1', baseDn: 'dc=ex');
+            }
+        };
+
+        // An invalid search option used to fail every health check, whatever the server.
+        $this->expectException(\Symfony\Component\Ldap\Exception\ConnectionException::class);
+        (new LdapDirectory($settings))->ping($settings->get());
+    }
 }
