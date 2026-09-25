@@ -105,7 +105,10 @@ Sécurité du composeur embarqué :
 
 ### Version et mises à jour
 - Version affichée en bas du menu (`git describe --tags`, inscrite dans les images par la CI). Administration → **Mises à jour** la compare aux versions publiées sur GitHub (`UPDATE_REPOSITORY`).
-- Bouton **Mettre à jour** avec le service optionnel `updater` (Watchtower) : `UPDATER_TOKEN=… docker compose --profile updater up -d`, avec les images ghcr.io (`API_IMAGE`, `FRONT_IMAGE`).
+- Bouton **Mettre à jour**, avec trois méthodes au choix :
+  - **Docker** : service optionnel `updater` (Watchtower), `UPDATER_TOKEN=… docker compose --profile updater up -d`, avec les images ghcr.io (`API_IMAGE`, `FRONT_IMAGE`) ;
+  - **sans Docker** : cron `php bin/console app:update:run`, qui lance `deploy/update.sh` ;
+  - **manuelle**.
 
 ### Boîtes d'envoi
 - Administration → **Boîtes d'envoi** : de vrais comptes email (SMTP, ou fournisseur par DSN : Brevo, SES, Mailjet, SendGrid, Postmark, Mailgun), avec copie de chaque email dans leur dossier « Envoyés » par IMAP.

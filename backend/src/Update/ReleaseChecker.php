@@ -14,19 +14,26 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 class ReleaseChecker
 {
-    private const CACHE_KEY = 'app.update.latest_release';
+    private const CACHE_KEY = 'app.update.latest_release.v2';
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly CacheInterface $cache,
         #[Autowire('%env(UPDATE_REPOSITORY)%')] private readonly string $repository,
         #[Autowire('%env(APP_VERSION)%')] private readonly string $version,
+        #[Autowire('%kernel.project_dir%/VERSION')] private readonly string $versionFile,
     ) {
     }
 
+    /** APP_VERSION (Docker images), else the VERSION file written by the update script (servers without Docker). */
     public function current(): AppVersion
     {
-        return AppVersion::parse($this->version);
+        $version = trim($this->version);
+        if ('' === $version && is_readable($this->versionFile)) {
+            $version = trim((string) file_get_contents($this->versionFile));
+        }
+
+        return AppVersion::parse($version);
     }
 
     public function isEnabled(): bool
@@ -67,6 +74,7 @@ class ReleaseChecker
             if (null === $best || version_compare($version, $best->version, '>')) {
                 $best = new LatestRelease(
                     $version,
+                    (string) $release['tag_name'],
                     (string) (($release['name'] ?? '') ?: $release['tag_name']),
                     (string) $release['html_url'],
                     isset($release['published_at']) ? new \DateTimeImmutable($release['published_at']) : null,
@@ -82,7 +90,7 @@ class ReleaseChecker
         foreach ($this->github('tags?per_page=100') as $tag) {
             $version = AppVersion::releaseOf((string) ($tag['name'] ?? ''));
             if (null !== $version && !str_contains($version, '-') && (null === $best || version_compare($version, $best->version, '>'))) {
-                $best = new LatestRelease($version, $tag['name'], $this->repositoryUrl().'/tree/'.rawurlencode($tag['name']));
+                $best = new LatestRelease($version, $tag['name'], $tag['name'], $this->repositoryUrl().'/tree/'.rawurlencode($tag['name']));
             }
         }
 

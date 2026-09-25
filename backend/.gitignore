@@ -17,3 +17,8 @@
 /phpunit.xml
 /.phpunit.cache/
 ###< phpunit/phpunit ###
+
+###> app ###
+# Written by deploy/update.sh (servers without Docker).
+/VERSION
+###< app ###

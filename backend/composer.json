@@ -34,6 +34,7 @@
         "symfony/messenger": "8.1.*",
         "symfony/monolog-bundle": "^4.1",
         "symfony/postmark-mailer": "*",
+        "symfony/process": "8.1.*",
         "symfony/property-access": "8.1.*",
         "symfony/property-info": "8.1.*",
         "symfony/runtime": "8.1.*",

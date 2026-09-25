@@ -9,8 +9,12 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 - **Version et mises à jour** :
   - la version installée s'affiche en bas du menu ; les administrateurs voient un badge **Nouveau** quand une version plus récente est publiée ;
   - page Administration → **Mises à jour** : version installée, dernière version publiée sur GitHub avec ses notes, et bouton **Mettre à jour** ;
-  - le bouton passe par le service optionnel `updater` (Watchtower, profil `updater`) : il télécharge les nouvelles images, redémarre les services, puis la page se recharge sur la nouvelle version. Sans lui, la page donne les commandes à lancer ;
-  - les images Docker portent leur version (`git describe --tags`). Nouvelles variables : `UPDATE_REPOSITORY`, `UPDATER_URL`, `UPDATER_TOKEN`. API : `GET /api/system/version`, `GET` et `POST /api/system/update`.
+  - trois **méthodes de mise à jour**, au choix dans la page :
+    - **Docker** : le service optionnel `updater` (Watchtower, profil `updater`) télécharge les nouvelles images et redémarre les conteneurs ;
+    - **serveur sans Docker** : la tâche planifiée `app:update:run` lance `deploy/update.sh` (git, composer, npm, migrations, redémarrage), avec journal en direct et retour à la version précédente en cas d'échec ;
+    - **manuelle** : la page donne les commandes à lancer ;
+  - la page se recharge sur la nouvelle version ; l'historique garde chaque mise à jour ;
+  - les images Docker portent leur version (`git describe --tags`). Nouvelles variables : `UPDATE_REPOSITORY`, `UPDATE_METHOD`, `UPDATER_URL`, `UPDATER_TOKEN`, `UPDATE_SCRIPT`, `UPDATE_RESTART_COMMAND`. API : `GET /api/system/version`, `GET` et `POST /api/system/update`, `PUT /api/system/update/method`.
 
 - **Layouts d'email** (Administration → Layouts d'email) : une enveloppe HTML commune (en-tête, pied de page, charte) avec l'emplacement `{{ content }}`.
   - Deux modèles de départ et un aperçu avec un contenu d'exemple.

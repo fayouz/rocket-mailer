@@ -22,8 +22,8 @@ export default defineNuxtConfig({
       docsUrl: 'https://github.com/fayouz/rocket-mailer/tree/develop/docs/content',
       changelogUrl: 'https://github.com/fayouz/rocket-mailer/blob/develop/CHANGELOG.md',
       mailpitUrl: '',
-      // Version of the interface: set by the Docker image (NUXT_PUBLIC_APP_VERSION).
-      appVersion: 'dev',
+      // Version of the interface: NUXT_PUBLIC_APP_VERSION, at build time (deploy/update.sh) or at runtime (Docker image).
+      appVersion: process.env.NUXT_PUBLIC_APP_VERSION || 'dev',
     },
   },
   icon: {

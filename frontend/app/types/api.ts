@@ -302,11 +302,29 @@ export interface AppVersionInfo {
 
 export interface ReleaseInfo {
   version: string
+  /** Git tag ("v0.7.0"). */
+  tag: string
   name: string
   url: string
   publishedAt: string | null
   /** Release notes (Markdown). */
   notes: string | null
+}
+
+export type UpdateMethod = 'docker' | 'script' | 'manual'
+
+export interface UpdateRun {
+  id: string
+  method: UpdateMethod
+  /** requested: waiting for the scheduled task (script); started: sent to Watchtower (docker). */
+  status: 'requested' | 'running' | 'started' | 'succeeded' | 'failed' | 'cancelled'
+  fromVersion: string
+  target: string | null
+  log?: string
+  requestedAt: string | null
+  requestedBy: string | null
+  startedAt: string | null
+  finishedAt: string | null
 }
 
 /** GET /api/system/update (administrators) */
@@ -318,5 +336,14 @@ export interface UpdateStatus {
   checkEnabled: boolean
   repositoryUrl: string | null
   error: string | null
-  updater: { configured: boolean }
+  method: UpdateMethod
+  defaultMethod: UpdateMethod
+  /** environment: no choice saved, UPDATE_METHOD (or automatic). */
+  methodSource: 'database' | 'environment'
+  methods: {
+    docker: { configured: boolean }
+    script: { script: string, installed: boolean, schedulerAlive: boolean, heartbeatAt: string | null }
+  }
+  run: UpdateRun | null
+  history: UpdateRun[]
 }
