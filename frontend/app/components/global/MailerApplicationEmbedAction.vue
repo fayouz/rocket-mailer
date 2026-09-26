@@ -4,6 +4,8 @@ import type { Application } from '#rocket/types/api'
 // "Code d'intégration" of one application (rocket.extensions.applications.rowActions): same dialog as "Intégrer"
 // in the composer, without a draft.
 defineProps<{ application: Application }>()
+// Row actions may ask the page to reload the list; this one only shows a dialog.
+defineEmits<{ refresh: [] }>()
 const open = ref(false)
 </script>
 

@@ -31,10 +31,14 @@ onMounted(async () => {
 const { data: platformSenders } = useAsyncData('applications-sender-suggestion', () => api<SenderOption[]>('/api/senders'), { default: () => [] })
 const suggestion = computed(() => platformSenders.value.find(o => o.default && o.source === 'settings') ?? null)
 
+// Displayed name of the suggestion: the application's name (known once it is created), else the platform's.
+const nameFromApplication = ref(false)
 function useSuggestion() {
   if (!suggestion.value) return
   form.senderEmail = suggestion.value.email
-  form.senderName = props.application?.name || suggestion.value.name || ''
+  form.senderName = props.application?.name ?? ''
+  nameFromApplication.value = !props.application
+  if (!form.senderName && !nameFromApplication.value) form.senderName = suggestion.value.name ?? ''
 }
 
 // Saved by the page once the application itself is saved (it then has an id); an error keeps the dialog open.
@@ -42,7 +46,7 @@ defineExpose<RocketApplicationFormExtension>({
   async save(application: Application) {
     await api<ApplicationSender>(`/api/application_senders/${application.id}`, {
       method: 'PATCH',
-      body: { senderName: form.senderName || null, senderEmail: form.senderEmail || null, allowedSenders: form.allowedSenders },
+      body: { senderName: form.senderName || (nameFromApplication.value ? application.name : null), senderEmail: form.senderEmail || null, allowedSenders: form.allowedSenders },
     })
     await refreshSenders()
   },
@@ -59,7 +63,7 @@ defineExpose<RocketApplicationFormExtension>({
     </p>
     <div class="grid gap-2 sm:grid-cols-2">
       <UFormField label="Nom affiché">
-        <UInput v-model="form.senderName" :placeholder="application?.name || 'Service commercial'" class="w-full" />
+        <UInput v-model="form.senderName" :placeholder="application?.name || (nameFromApplication ? 'Nom de l’application' : 'Service commercial')" class="w-full" />
       </UFormField>
       <UFormField label="Adresse email" required>
         <UInput v-model="form.senderEmail" type="email" placeholder="contact@crm.exemple.com" class="w-full" data-testid="application-sender-email" />
