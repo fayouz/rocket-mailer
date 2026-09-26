@@ -25,6 +25,17 @@ export default defineAppConfig({
     ] as { label: string, icon?: string, to?: string, type?: 'label', exact?: boolean, exactQuery?: boolean, admin?: boolean }[],
     // The compose UI is embedded by other applications (/embed/compose, public/embed.js).
     embed: true,
+    // Extension points of the layer's pages (components of app/components/global/): the sender of each application
+    // (column and form section, resource /api/application_senders/{id}) and its integration code.
+    extensions: {
+      applications: {
+        columns: [{ id: 'sender', header: 'Expéditeur', component: 'MailerApplicationSenderCell' }],
+        rowActions: ['MailerApplicationEmbedAction'],
+        formSections: ['MailerApplicationSender'],
+        help: "Une application s'authentifie avec son jeton (Authorization: Bearer rma_…). Si l'impersonation est autorisée, l'en-tête X-Impersonate-User lui permet d'agir en tant qu'un utilisateur (jamais avec le rôle administrateur) et de générer des jetons d'intégration pour le composeur embarqué, affichable uniquement depuis les origines déclarées.",
+        tokenExample: 'MailerApplicationTokenExample',
+      },
+    },
     // Extra entries of the Administration menu.
     adminNavigation: [
       { label: 'Boîtes d’envoi', icon: 'i-lucide-mailbox', to: '/mailboxes' },
