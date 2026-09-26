@@ -13,14 +13,15 @@ use App\Repository\EmailTemplateRepository;
 use App\Repository\MailboxRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Rocket\Core\Command\DemoSeederInterface;
+use Rocket\Core\Entity\Application;
 use Rocket\Core\Repository\ApplicationRepository;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Demo data of Rocket Mailer: the demo application (holding DEMO_APP_TOKEN) becomes "Démo CRM", the third-party
- * application of demo/host that embeds the composer, with its own sender and sending mailbox; shared templates
- * and a layout.
+ * application of demo/host that embeds the composer, with its own sender and sending mailbox; "Rocket Cloud", linked
+ * to the Rocket Auth client rocket-cloud (suite); shared templates and a layout.
  */
 final class MailerDemoSeeder implements DemoSeederInterface
 {
@@ -53,6 +54,23 @@ final class MailerDemoSeeder implements DemoSeederInterface
                 ->setSenderEmail('contact@crm.example.org')
                 ->setSenderName('Démo CRM')
                 ->setAllowedSenders(['*@crm.example.org']));
+        }
+
+        // Rocket Cloud, in the suite: it sends its share notifications with a token of Rocket Auth (client
+        // credentials of the client "rocket-cloud"), mapped to this application, on behalf of its users.
+        if (null === $this->applications->findOneBy(['oauthClientId' => 'rocket-cloud'])) {
+            $cloud = (new Application())
+                ->setName('Rocket Cloud')
+                ->setDescription('Rocket Cloud : notifications de partage, envoyées au nom de ses utilisateurs (client Rocket Auth rocket-cloud).')
+                ->setCanImpersonate(true)
+                ->setOauthClientId('rocket-cloud');
+            // Its static token is never shown: Rocket Cloud authenticates with the tokens of Rocket Auth.
+            $cloud->rotateToken();
+            $this->em->persist($cloud);
+            // Its own sender: required to send without "from".
+            $this->em->persist($this->applicationSenders->forApplication($cloud)
+                ->setSenderEmail('partage@cloud.example.org')
+                ->setSenderName('Rocket Cloud'));
         }
 
         // Sending mailbox of the CRM: SMTP through Mailpit (to see the emails), copy in GreenMail's IMAP "Sent" folder.
