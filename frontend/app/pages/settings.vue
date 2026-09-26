@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { ColorPalette, SenderAddress, Settings } from '~/types/api'
+import type { SenderAddress, Settings } from '~/types/api'
 
 definePageMeta({ admin: true })
 useHead({ title: 'Réglages · Rocket Mailer' })
@@ -15,25 +15,6 @@ const UButton = resolveComponent('UButton')
 // Loading the settings first seeds the sender addresses from MAILER_DEFAULT_FROM on a fresh install.
 const { data: settings } = await useAsyncData('settings', () => api<Settings>('/api/settings'))
 const { data: senders, refresh } = await useAsyncData('sender-addresses', () => api<SenderAddress[]>('/api/sender_addresses'), { default: () => [] })
-
-// Project palette: Rocket Mailer's colors, and the default of the applications' embedded composers.
-const { data: palettes } = await useAsyncData('settings-palettes', () => api<ColorPalette[]>('/api/color_palettes'), { default: () => [] })
-const paletteItems = computed(() => [
-  { label: 'Couleurs par défaut de Rocket Mailer', value: 'default' },
-  ...palettes.value.map(palette => ({ label: palette.name, value: `/api/color_palettes/${palette.id}` })),
-])
-const theme = useTheme()
-
-async function setPalette(value: string) {
-  try {
-    settings.value = { ...settings.value!, ...await api<Settings>('/api/settings', { method: 'PATCH', body: { palette: value === 'default' ? '' : value } }) }
-    await theme.load()
-    toast.add({ title: 'Palette du projet enregistrée', color: 'success' })
-  }
-  catch (error) {
-    toast.add({ title: 'Enregistrement impossible', description: apiErrorMessage(error), color: 'error' })
-  }
-}
 
 async function togglePersonal(value: boolean) {
   try {
@@ -169,24 +150,6 @@ async function add() {
           variant="subtle"
           description="Ces adresses sont celles de Rocket Mailer : les applications externes ne les utilisent jamais. Chacune a son propre expéditeur (page Applications) ; l'adresse par défaut ci-dessus y est seulement proposée en suggestion."
         />
-
-        <UPageCard
-          title="Palette du projet"
-          description="Couleurs de Rocket Mailer, et par défaut celles du composeur embarqué des applications (une application peut avoir la sienne)."
-          variant="subtle"
-          data-testid="project-palette"
-        >
-          <div class="flex flex-wrap items-center gap-3">
-            <USelect
-              :model-value="settings?.palette ? `/api/color_palettes/${settings.palette.id}` : 'default'"
-              :items="paletteItems"
-              class="min-w-72"
-              data-testid="project-palette-select"
-              @update:model-value="(value: string) => setPalette(value)"
-            />
-            <UButton label="Gérer les palettes" icon="i-lucide-palette" color="neutral" variant="link" to="/palettes" />
-          </div>
-        </UPageCard>
       </div>
     </template>
   </UDashboardPanel>

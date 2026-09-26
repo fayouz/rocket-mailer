@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\Post;
 use App\Repository\SenderAddressRepository;
 use App\State\SenderAddressProcessor;
 use Doctrine\ORM\Mapping as ORM;
+use Rocket\Core\Entity\TrackedTrait;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Mime\Address;

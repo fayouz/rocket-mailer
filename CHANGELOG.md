@@ -6,11 +6,13 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
-- **Thème clair, sombre ou système**, au choix de chaque utilisateur (bouton en bas du menu, et sur la page de connexion).
-- **Palettes de couleurs** (Administration → Palettes) : couleurs principale, secondaire, succès, information, avertissement et erreur, ton des gris, avec aperçu ; les nuances sont calculées.
-  - La **palette du projet** habille Rocket Mailer, page de connexion comprise (Palettes → « Utiliser pour le projet », ou Réglages).
-  - Elle est aussi la palette par défaut du composeur embarqué ; chaque **application** peut en choisir une autre (page Applications).
-  - API : `/api/color_palettes`, `palette` dans `PATCH /api/settings` et sur les applications, `GET /api/theme` (public).
+- **Authentification unique (OpenID Connect)** : nouveau type de serveur d'authentification, pour se connecter avec Rocket Auth ou tout fournisseur OpenID Connect :
+  - bouton **Se connecter avec …** sur la page de connexion, pour chaque fournisseur actif ;
+  - flux *authorization code* avec PKCE, `state` et `nonce`. L'API vérifie le jeton d'identité (signature RS256 via JWKS, émetteur, audience, expiration) ;
+  - comptes créés à la première connexion (source « SSO »), rôle administrateur piloté par la revendication `groups` (optionnel), rattachement des comptes existants seulement pour un fournisseur de confiance ;
+  - secret du client chiffré en base, URL interne pour les déploiements Docker, vérification du fournisseur par le worker et sur le tableau de bord ;
+  - API : `GET /api/auth/providers`, `POST /api/auth/oidc/callback`, `POST /api/authentication_servers/oidc/test`. Voir la documentation, *Administration → Authentification unique*.
+- **Thème clair, sombre ou système** et **palettes de couleurs**, fournis par rocket-core 0.2 : sélecteur en bas du menu et sur la page de connexion, page Administration → Palettes (palette du projet, et une palette par application pour son composeur embarqué), API `/api/color_palettes`, `/api/theme/project`, `GET /api/theme` (public).
   - Démo : le composeur de la Démo CRM prend sa palette indigo « Démo CRM ».
 
 - **Santé des boîtes d'envoi et de l'annuaire LDAP** sur le tableau de bord :
@@ -70,6 +72,13 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Modifié
 
+- **Rocket Mailer s'appuie sur [rocket-core](https://github.com/fayouz/rocket-core)**, le socle commun des applications Rocket (bundle Symfony `rocket/core-bundle`, layer Nuxt `@rocket/core`) : configuration initiale, comptes locaux, LDAP et SSO, serveurs d'authentification, applications externes, tableau de bord, état des services, mises à jour et démo. Le dépôt ne garde que le métier de Rocket Mailer. Conséquences :
+  - **mode suite** : avec `ROCKET_AUTH_URL` (et `ROCKET_AUTH_*`), la connexion passe par Rocket Auth, qui gère les comptes, les groupes et l'annuaire ; sans, Rocket Mailer reste autonome. Voir *Installation → Autonome ou dans la suite Rocket* ;
+  - les **réglages d'expédition des applications** (expéditeur, adresses qu'elles peuvent imposer) ont leur propre ressource d'API, `GET`/`PATCH /api/application_senders/{id}` (et `GET /api/application_senders`) ; `senderEmail`, `senderName` et `allowedSenders` ne font plus partie de `/api/applications`. La page Applications les enregistre dans le même formulaire, et la migration reprend ceux déjà saisis ;
+  - le mot de passe du compte de service LDAP et les secrets des fournisseurs OpenID Connect sont chiffrés avec la nouvelle clé `SECRETS_ENCRYPTION_KEY` (vide : dérivée de `APP_SECRET`) ; la migration les chiffre à nouveau. `MAILBOX_ENCRYPTION_KEY` chiffre toujours les mots de passe des boîtes d'envoi : gardez-la ;
+  - tableau de bord : indicateur **Templates disponibles**, graphique d'activité par jour (envoyés, échecs, en file), utilisateurs SSO ; le **relais SMTP** est contacté par le worker toutes les 5 minutes (désactivé avec `MAILER_DSN=null://null`) et chaque boîte d'envoi a une vérification pour l'envoi et une pour la copie IMAP ; la file surveille toutes les tâches de fond ;
+  - le composeur embarqué utilise le protocole commun des pages embarquées (`useEmbedBridge`) : rien ne change pour `embed.js`, le web component et les clients d'intégration ;
+  - la session de l'interface est propre à Rocket Mailer : reconnectez-vous une fois après la mise à jour.
 - Le worker consomme aussi les tâches planifiées : `messenger:consume async scheduler_default` (à reprendre dans un service systemd ou supervisord existant).
 - Le tableau de bord occupe toute la largeur de l'écran.
 

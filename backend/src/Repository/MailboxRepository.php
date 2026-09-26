@@ -2,10 +2,10 @@
 
 namespace App\Repository;
 
-use App\Entity\Application;
 use App\Entity\Mailbox;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
+use Rocket\Core\Entity\Application;
 
 /** @extends ServiceEntityRepository<Mailbox> */
 class MailboxRepository extends ServiceEntityRepository

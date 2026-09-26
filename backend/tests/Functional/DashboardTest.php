@@ -4,10 +4,11 @@ namespace App\Tests\Functional;
 
 use App\Entity\Email;
 use App\Entity\EmailTemplate;
-use App\Entity\User;
 use App\Tests\ApiTestTrait;
+use Rocket\Core\Entity\User;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
+/** The Rocket Mailer section of the dashboard (the dashboard itself: see rocket-core). */
 final class DashboardTest extends WebTestCase
 {
     use ApiTestTrait;
@@ -41,17 +42,20 @@ final class DashboardTest extends WebTestCase
         $this->assertStatus(200);
 
         self::assertSame('user', $stats['scope']);
-        self::assertSame(1, $stats['emails']['sent']);
-        self::assertSame(1, $stats['emails']['failed']);
-        self::assertSame(1, $stats['emails']['queued']);
-        self::assertEquals(50, $stats['emails']['deliveryRate']);
-        self::assertSame(['total' => 1, 'shared' => 1], $stats['templates']);
+        $kpis = array_column($stats['kpis'], 'value', 'id');
+        self::assertSame(1, $kpis['sent']);
+        self::assertEquals(50, $kpis['rate']);
+        self::assertSame(1, $kpis['queue']);
+        self::assertSame(1, $kpis['templates']);
+        self::assertSame(['sent', 'failed', 'queued'], array_column($stats['series'], 'key'));
         self::assertCount(30, $stats['daily']);
         self::assertSame(['sent' => 1, 'failed' => 1, 'queued' => 1], array_intersect_key(end($stats['daily']), ['sent' => 0, 'failed' => 0, 'queued' => 0]));
-        self::assertSame(['Alice 3', 'Alice 2', 'Alice 1'], array_column($stats['recentEmails'], 'subject'));
+        self::assertSame(['Alice 3', 'Alice 2', 'Alice 1'], array_column($stats['recent']['items'], 'title'));
+        self::assertSame(['En file', 'Échec', 'Envoyé'], array_column($stats['recent']['items'], 'badge'));
         self::assertNotContains('Bob 1', array_column($stats['activity'], 'title'));
         self::assertNotContains('Private to Bob (version 1)', array_column($stats['activity'], 'title'));
         self::assertContains('Shared by Bob (version 1)', array_column($stats['activity'], 'title'));
+        self::assertContains('Mes envois', array_column($stats['quickActions'], 'label'));
 
         // No admin-only data: users, applications, service details.
         self::assertArrayNotHasKey('users', $stats);
@@ -71,19 +75,20 @@ final class DashboardTest extends WebTestCase
         $this->assertStatus(200);
 
         self::assertSame('platform', $stats['scope']);
-        self::assertSame(2, $stats['emails']['sent']);
-        self::assertSame(['total' => 2, 'enabled' => 2, 'ldap' => 0, 'local' => 2], $stats['users']);
+        self::assertSame(2, array_column($stats['kpis'], 'value', 'id')['sent']);
+        self::assertSame(['total' => 2, 'enabled' => 2, 'local' => 2, 'ldap' => 0, 'oidc' => 0], $stats['users']);
         self::assertSame('Partner CRM', $stats['applications'][0]['name']);
-        self::assertSame(1, $stats['applications'][0]['sent']);
+        self::assertStringContainsString('via Partner CRM', implode(' ', array_column($stats['recent']['items'], 'subtitle')));
         self::assertContains('application.created', array_column($stats['activity'], 'type'));
+        self::assertContains('email.sent', array_column($stats['activity'], 'type'));
 
         $services = array_column($stats['health']['services'], null, 'id');
-        self::assertSame(['database', 'queue', 'mailer', 'mailboxes', 'ldap', 'storage'], array_keys($services));
+        self::assertSame(['database', 'queue', 'ldap', 'sso', 'mailboxes', 'mailer', 'storage'], array_keys($services));
         self::assertSame('operational', $services['database']['status']);
-        // MAILER_DSN=null://null in tests: nothing is actually delivered.
-        self::assertSame('degraded', $services['mailer']['status']);
+        // MAILER_DSN=null://null in tests: no relay to check.
+        self::assertSame('disabled', $services['mailer']['status']);
+        self::assertSame('disabled', $services['mailboxes']['status']);
         self::assertSame('disabled', $services['ldap']['status']);
-        self::assertNotSame('operational', $stats['health']['status']);
     }
 
     public function testDelegatedSessionsCannotReadTheDashboard(): void

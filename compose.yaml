@@ -14,8 +14,17 @@ x-api-env: &api-env
   JWT_PASSPHRASE: ${JWT_PASSPHRASE:-change-me-in-production}
   # First-run setup (creation of the administrator): optional secret asked by the setup page.
   SETUP_TOKEN: ${SETUP_TOKEN:-}
-  # Encrypts the passwords of the sending mailboxes (empty: derived from APP_SECRET).
+  # Encrypts the secrets stored in the database: LDAP bind password, OpenID Connect client secrets
+  # (SECRETS_ENCRYPTION_KEY), passwords of the sending mailboxes (MAILBOX_ENCRYPTION_KEY). Empty: derived from APP_SECRET.
+  SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
   MAILBOX_ENCRYPTION_KEY: ${MAILBOX_ENCRYPTION_KEY:-}
+  # Suite mode: sign-in through Rocket Auth (see rocket-core). Empty ROCKET_AUTH_URL: standalone.
+  ROCKET_AUTH_URL: ${ROCKET_AUTH_URL:-}
+  ROCKET_AUTH_INTERNAL_URL: ${ROCKET_AUTH_INTERNAL_URL:-}
+  ROCKET_AUTH_CLIENT_ID: ${ROCKET_AUTH_CLIENT_ID:-rocket-mailer}
+  ROCKET_AUTH_CLIENT_SECRET: ${ROCKET_AUTH_CLIENT_SECRET:-}
+  ROCKET_AUTH_ADMIN_GROUP: ${ROCKET_AUTH_ADMIN_GROUP:-rocket-admins}
+  ROCKET_LOCAL_LOGIN: ${ROCKET_LOCAL_LOGIN:-0}
   CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$$}
   LDAP_ENABLED: ${LDAP_ENABLED:-0}
   LDAP_URL: ${LDAP_URL:-ldap://ldap:389}

@@ -2,17 +2,15 @@
 
 namespace App\Tests\Functional;
 
-use App\Ldap\LdapConfig;
-use App\Ldap\UserDirectoryInterface;
-use App\Message\CheckServicesHealth;
 use App\Tests\ApiTestTrait;
+use Rocket\Core\Message\CheckServicesHealth;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
- * Network checks of the LDAP server and of the sending mailboxes, shown on the dashboard.
+ * Network checks of the sending mailboxes (App\Health\MailboxesProbe), shown on the dashboard with those of rocket-core.
  * The successful mailbox check needs GreenMail (GREENMAIL_HOST); failures use a closed port.
  */
 final class HealthCheckTest extends WebTestCase
@@ -24,46 +22,6 @@ final class HealthCheckTest extends WebTestCase
         return 'Bearer '.$this->jwtFor($this->createUser('admin@example.org', ['ROLE_ADMIN']));
     }
 
-    /** A directory whose server answers, or not. */
-    private function directory(bool $reachable): UserDirectoryInterface
-    {
-        return new class($reachable) implements UserDirectoryInterface {
-            public int $pings = 0;
-
-            public function __construct(public bool $reachable)
-            {
-            }
-
-            public function isEnabled(): bool
-            {
-                return true;
-            }
-
-            public function checkCredentials(string $dn, string $password): bool
-            {
-                return false;
-            }
-
-            public function fetchUsers(): iterable
-            {
-                return [];
-            }
-
-            public function probe(LdapConfig $config, int $limit = 5): array
-            {
-                return ['count' => 0, 'sample' => []];
-            }
-
-            public function ping(LdapConfig $config): void
-            {
-                ++$this->pings;
-                if (!$this->reachable) {
-                    throw new \RuntimeException("Can't contact LDAP server");
-                }
-            }
-        };
-    }
-
     /** @return array<string, mixed> */
     private function service(array $health, string $id): array
     {
@@ -73,19 +31,6 @@ final class HealthCheckTest extends WebTestCase
             }
         }
         self::fail("No $id service");
-    }
-
-    private function enableLdap(string $admin): void
-    {
-        $this->api('PUT', '/api/ldap/config', [
-            'enabled' => true,
-            'url' => 'ldap://ldap.example.org:389',
-            'baseDn' => 'ou=people,dc=example,dc=org',
-            'bindDn' => 'cn=reader,dc=example,dc=org',
-            'bindPassword' => 's3cret-bind',
-            'userFilter' => '(objectClass=inetOrgPerson)',
-        ], $admin);
-        $this->assertStatus(200);
     }
 
     /** @return array<string, mixed> */
@@ -110,47 +55,28 @@ final class HealthCheckTest extends WebTestCase
         return $mailbox;
     }
 
-    public function testLdapAndMailboxFailuresShowOnTheDashboard(): void
+    public function testMailboxFailuresShowOnTheDashboard(): void
     {
-        $this->client->disableReboot();
-        static::getContainer()->set(UserDirectoryInterface::class, $directory = $this->directory(false));
         $admin = $this->admin();
-        $this->enableLdap($admin);
 
-        // Not checked yet: unknown, the platform status ignores it.
         $dashboard = $this->api('GET', '/api/dashboard', authorization: $admin);
-        self::assertSame('unknown', $this->service($dashboard['health'], 'ldap')['status']);
         self::assertSame('disabled', $this->service($dashboard['health'], 'mailboxes')['status']);
 
-        // A mailbox whose servers refuse connections.
-        $this->createMailbox($admin, 'Boîte en panne', '127.0.0.1', 1, 1);
+        // A mailbox whose servers refuse connections: one check for sending, one for the IMAP copy.
+        $mailbox = $this->createMailbox($admin, 'Boîte en panne', '127.0.0.1', 1, 1);
+        self::assertSame('unknown', $this->service($this->api('GET', '/api/dashboard', authorization: $admin)['health'], 'mailboxes')['status']);
 
         $health = $this->api('POST', '/api/health/check', authorization: $admin);
         $this->assertStatus(200);
-        self::assertSame(1, $directory->pings);
-        $ldap = $this->service($health, 'ldap');
-        self::assertSame('down', $ldap['status']);
-        self::assertStringContainsString("Can't contact LDAP server", $ldap['detail']);
-        self::assertNotNull($ldap['check']['failingSince']);
-
         $mailboxes = $this->service($health, 'mailboxes');
         self::assertSame('down', $mailboxes['status']);
-        self::assertStringContainsString('1 sur 1 en échec : Boîte en panne', $mailboxes['detail']);
-        self::assertSame('down', $mailboxes['items'][0]['smtp']['status']);
-        self::assertSame('down', $mailboxes['items'][0]['imap']['status']);
+        self::assertStringContainsString('2 sur 2 en échec : Boîte en panne (envoi)', $mailboxes['detail']);
+        self::assertSame([$mailbox['id'].':smtp', $mailbox['id'].':imap'], array_column($mailboxes['items'], 'id'));
+        self::assertSame(['down', 'down'], array_column($mailboxes['items'], 'status'));
         self::assertSame('down', $health['status']);
-
-        // The server is back: the failure streak ends.
-        $directory->reachable = true;
-        $ldap = $this->service($this->api('POST', '/api/health/check', authorization: $admin), 'ldap');
-        self::assertSame('operational', $ldap['status']);
-        self::assertNull($ldap['check']['failingSince']);
-        self::assertNotNull($ldap['check']['lastOkAt']);
 
         // Users only see the overall status.
         $user = 'Bearer '.$this->jwtFor($this->createUser('user@example.org'));
-        $this->api('POST', '/api/health/check', authorization: $user);
-        $this->assertStatus(403);
         self::assertArrayNotHasKey('services', $this->api('GET', '/api/dashboard', authorization: $user)['health']);
     }
 
@@ -168,8 +94,9 @@ final class HealthCheckTest extends WebTestCase
 
         $mailboxes = $this->service($this->api('GET', '/api/dashboard', authorization: $admin)['health'], 'mailboxes');
         self::assertSame('operational', $mailboxes['status']);
-        self::assertSame($mailbox['id'], $mailboxes['items'][0]['id']);
-        self::assertSame(['operational', 'operational'], [$mailboxes['items'][0]['smtp']['status'], $mailboxes['items'][0]['imap']['status']]);
+        self::assertSame([$mailbox['id'].':smtp', $mailbox['id'].':imap'], array_column($mailboxes['items'], 'id'));
+        self::assertSame(['operational', 'operational'], array_column($mailboxes['items'], 'status'));
+        self::assertStringContainsString('Sent', $mailboxes['items'][1]['check']['detail']);
 
         // Disabled mailbox: its results are dropped at the next check.
         $this->api('PATCH', '/api/mailboxes/'.$mailbox['id'], ['enabled' => false], $admin);

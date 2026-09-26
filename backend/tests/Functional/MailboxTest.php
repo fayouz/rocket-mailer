@@ -111,7 +111,7 @@ final class MailboxTest extends WebTestCase
         $erpOptions = $sources($this->api('GET', '/api/senders', authorization: 'Bearer '.$erpToken, headers: $asAlice));
         self::assertSame(['application:crm@partner.example'], $erpOptions);
 
-        $appOptions = $sources($this->api('GET', '/api/senders', authorization: 'Bearer '.$this->jwtFor($this->em()->getRepository(\App\Entity\User::class)->findOneBy(['email' => 'alice@example.org']))));
+        $appOptions = $sources($this->api('GET', '/api/senders', authorization: 'Bearer '.$this->jwtFor($this->em()->getRepository(\Rocket\Core\Entity\User::class)->findOneBy(['email' => 'alice@example.org']))));
         self::assertSame(['mailbox:support@example.org'], array_values(array_filter($appOptions, static fn (string $s) => str_starts_with($s, 'mailbox:'))));
 
         // The ERP cannot send through the CRM's mailbox, nor through the shared one.

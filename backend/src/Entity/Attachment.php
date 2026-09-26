@@ -8,6 +8,8 @@ use ApiPlatform\Metadata\Get;
 use App\Repository\AttachmentRepository;
 use App\State\AttachmentDeleteProcessor;
 use Doctrine\ORM\Mapping as ORM;
+use Rocket\Core\Entity\TrackedTrait;
+use Rocket\Core\Entity\User;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;

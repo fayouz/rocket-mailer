@@ -1,51 +1,7 @@
-export interface Tracked {
-  createdAt: string
-  updatedAt: string
-  createdBy: string | null
-  updatedBy: string | null
-}
+import type { Tracked, UserSummary } from '#rocket/types/api'
 
-export interface UserSummary {
-  id: string
-  email: string
-  firstName: string | null
-  lastName: string | null
-  displayName: string
-}
-
-export interface User extends UserSummary, Tracked {
-  roles: string[]
-  source: 'local' | 'ldap'
-  authenticationServerName: string | null
-  ldapDn: string | null
-  ldapSyncedAt: string | null
-  enabled: boolean
-}
-
-export interface Me {
-  user: User | null
-  application: { id: string, name: string } | null
-  roles: string[]
-  embed: boolean
-}
-
-export interface Application extends Tracked {
-  id: string
-  name: string
-  description: string | null
-  tokenHint: string
-  plainToken?: string
-  canImpersonate: boolean
-  allowedOrigins: string[]
-  allowedSenders: string[]
-  /** Its own sender, required to send (never the platform's addresses). */
-  senderEmail: string | null
-  senderName: string | null
-  /** Colors of its embedded composer; null: the project's palette. */
-  palette: { '@id': string, id: string, name: string } | null
-  enabled: boolean
-  lastUsedAt: string | null
-}
+// Types of the Rocket core (users, applications, dashboard…), then those of this application.
+export type * from '#rocket/types/api'
 
 /** A "{{ name }}" placeholder of a template. */
 export interface TemplateVariable {
@@ -88,6 +44,17 @@ export interface TemplateVersion {
   loggedAt: string
   username: string | null
   changedFields: string[]
+}
+
+/** GET/PATCH /api/application_senders/{application id}: the sender settings of an application (administrators). */
+export interface ApplicationSender {
+  /** Id of the application. */
+  id: string
+  /** Its own sender: the default "From" of its composer and of its API sends (required to send). */
+  senderEmail?: string | null
+  senderName?: string | null
+  /** Addresses it may impose: exact addresses or whole domains ("*@crm.example.com"). */
+  allowedSenders: string[]
 }
 
 /** A "From" choice offered in the composer. */
@@ -145,21 +112,6 @@ export interface SenderAddress extends Tracked {
 export interface Settings {
   personalFromAllowed: boolean
   installDefaultFrom?: string
-  /** The project's palette (Rocket Mailer, and default of the applications); null: default colors. */
-  palette: import('~/utils/palette').ThemePalette | null
-}
-
-/** A color palette: "#rrggbb" per semantic color (null: default), and the tone of the grays. */
-export interface ColorPalette extends Tracked {
-  id: string
-  name: string
-  primary: string
-  secondary: string | null
-  success: string | null
-  info: string | null
-  warning: string | null
-  error: string | null
-  neutral: import('~/utils/palette').Neutral
 }
 
 export interface Attachment {
@@ -208,204 +160,4 @@ export interface EmailDraft {
   attachments: string[]
   /** Values of the template variables, flat ({ "client.firstName": "Jean" }) or nested ({ client: { firstName: "Jean" } }). */
   variables?: Record<string, unknown>
-}
-
-/** unknown: network check not run yet (LDAP, mailboxes: every 5 minutes). */
-export type ServiceStatus = 'operational' | 'degraded' | 'down' | 'disabled' | 'unknown'
-
-/** Last result of a background network check. */
-export interface ServiceCheckResult {
-  status: 'operational' | 'down' | 'unknown'
-  detail?: string
-  latencyMs?: number | null
-  checkedAt?: string
-  lastOkAt?: string | null
-  failingSince?: string | null
-}
-
-export interface MailboxHealth {
-  id: string
-  name: string
-  email: string
-  status: 'operational' | 'down' | 'unknown'
-  smtp: ServiceCheckResult | null
-  /** null: no IMAP copy for this mailbox. */
-  imap: ServiceCheckResult | null
-}
-
-export interface ServiceHealth {
-  id: 'database' | 'queue' | 'mailer' | 'mailboxes' | 'ldap' | 'storage'
-  label: string
-  status: ServiceStatus
-  detail: string
-  latencyMs?: number
-  queued?: number
-  failedMessages?: number
-  users?: number
-  lastSyncAt?: string | null
-  usagePercent?: number | null
-  freeBytes?: number | null
-  /** ldap: last network check. */
-  check?: ServiceCheckResult | null
-  /** mailboxes */
-  total?: number
-  failing?: number
-  items?: MailboxHealth[]
-}
-
-export interface DashboardActivity {
-  type: 'email.sent' | 'email.failed' | 'email.queued' | 'template.create' | 'template.update' | 'template.remove' | 'user.created' | 'application.created'
-  at: string
-  title: string
-  actor: string | null
-  link: string | null
-}
-
-export interface DashboardApplication {
-  id: string
-  name: string
-  enabled: boolean
-  canImpersonate: boolean
-  lastUsedAt: string | null
-  sent: number
-  failed: number
-}
-
-/** GET /api/dashboard: platform-wide for admins, the user's own activity otherwise. */
-export interface Dashboard {
-  scope: 'platform' | 'user'
-  generatedAt: string
-  days: number
-  emails: {
-    sent: number
-    failed: number
-    queued: number
-    oldestQueuedAt: string | null
-    previousSent: number
-    previousFailed: number
-    /** Percentage of delivered emails among processed ones; null when nothing was processed. */
-    deliveryRate: number | null
-    withAttachments: number
-  }
-  templates: { total: number, shared: number }
-  daily: { date: string, sent: number, failed: number, queued: number }[]
-  recentEmails: {
-    id: string
-    subject: string
-    to: string[]
-    status: EmailStatus
-    createdAt: string
-    from: string | null
-    sender: string
-    applicationName: string | null
-  }[]
-  activity: DashboardActivity[]
-  health: { status: Exclude<ServiceStatus, 'disabled' | 'unknown'>, services?: ServiceHealth[] }
-  users?: { total: number, enabled: number, ldap: number, local: number }
-  applications?: DashboardApplication[]
-}
-
-/** A JSON-LD collection page (Accept: application/ld+json), for paginated lists. */
-export interface Collection<T> {
-  member: T[]
-  totalItems: number
-}
-
-export interface AuthenticationServer extends Tracked {
-  id: string
-  name: string
-  type: 'ldap'
-  enabled: boolean
-  url: string
-}
-
-export interface AuthenticationServerDiscoveryCandidate {
-  url: string
-  reachable: boolean
-  latencyMs: number | null
-}
-
-export interface LdapAttributes {
-  email: string
-  firstName: string
-  lastName: string
-  groups: string
-}
-
-/** GET /api/ldap/config: the directory settings (the bind password is never returned). */
-export interface LdapConfig {
-  enabled: boolean
-  url: string
-  startTls: boolean
-  baseDn: string
-  bindDn: string
-  hasBindPassword: boolean
-  userFilter: string
-  adminGroupDn: string
-  attributes: LdapAttributes
-  /** "environment": the LDAP_* variables of the .env (nothing saved yet). */
-  source: 'database' | 'environment'
-  defaults: { attributes: LdapAttributes }
-}
-
-export interface LdapTestResult {
-  ok: boolean
-  message: string
-  count: number
-  sample: { dn: string, email: string, firstName: string | null, lastName: string | null, admin: boolean | null }[]
-}
-
-/** GET /api/system/version */
-export interface AppVersionInfo {
-  /** "0.7.0", "0.7.0+3 (abc1234)" (commits after a release), or "dev" / a branch name. */
-  version: string
-  release: string | null
-}
-
-export interface ReleaseInfo {
-  version: string
-  /** Git tag ("v0.7.0"). */
-  tag: string
-  name: string
-  url: string
-  publishedAt: string | null
-  /** Release notes (Markdown). */
-  notes: string | null
-}
-
-export type UpdateMethod = 'docker' | 'script' | 'manual'
-
-export interface UpdateRun {
-  id: string
-  method: UpdateMethod
-  /** requested: waiting for the scheduled task (script); started: sent to Watchtower (docker). */
-  status: 'requested' | 'running' | 'started' | 'succeeded' | 'failed' | 'cancelled'
-  fromVersion: string
-  target: string | null
-  log?: string
-  requestedAt: string | null
-  requestedBy: string | null
-  startedAt: string | null
-  finishedAt: string | null
-}
-
-/** GET /api/system/update (administrators) */
-export interface UpdateStatus {
-  current: AppVersionInfo & { raw: string }
-  latest: ReleaseInfo | null
-  /** null: this build has no version number to compare (development build, branch image). */
-  updateAvailable: boolean | null
-  checkEnabled: boolean
-  repositoryUrl: string | null
-  error: string | null
-  method: UpdateMethod
-  defaultMethod: UpdateMethod
-  /** environment: no choice saved, UPDATE_METHOD (or automatic). */
-  methodSource: 'database' | 'environment'
-  methods: {
-    docker: { configured: boolean }
-    script: { script: string, installed: boolean, schedulerAlive: boolean, heartbeatAt: string | null }
-  }
-  run: UpdateRun | null
-  history: UpdateRun[]
 }

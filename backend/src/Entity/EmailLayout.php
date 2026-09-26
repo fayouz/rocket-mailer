@@ -12,6 +12,7 @@ use App\Repository\EmailLayoutRepository;
 use App\Template\Layouts;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Rocket\Core\Entity\TrackedTrait;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Uid\Uuid;

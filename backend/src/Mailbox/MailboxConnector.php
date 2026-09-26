@@ -85,12 +85,8 @@ class MailboxConnector
                     ->subject(\sprintf('Test de la boîte d’envoi « %s »', $mailbox->getName()))
                     ->text("Ce message confirme que Rocket Mailer peut envoyer depuis {$mailbox->getEmail()}."));
                 $result['smtp']['message'] = \sprintf('Email de test envoyé à %s.', $sendTo);
-            } elseif ($transport instanceof SmtpTransport) {
-                $transport->start();
-                $transport->stop();
-                $result['smtp']['message'] = 'Connexion et authentification SMTP réussies.';
             } else {
-                $result['smtp']['message'] = 'Configuration lue. Un fournisseur ne peut être vérifié qu’en envoyant un email de test.';
+                $result['smtp']['message'] = self::checkTransport($transport);
             }
         } catch (\Throwable $e) {
             $result['smtp'] = ['ok' => false, 'message' => $e->getMessage()];
@@ -114,6 +110,42 @@ class MailboxConnector
         }
 
         return $result;
+    }
+
+    /**
+     * SMTP login of the mailbox (or, for a provider, nothing without sending): the health check of the worker.
+     *
+     * @return string what was checked; throws on failure
+     */
+    public function checkSmtp(Mailbox $mailbox): string
+    {
+        return self::checkTransport($this->transport($mailbox));
+    }
+
+    /**
+     * IMAP login of the mailbox and its "Sent" folder: the health check of the worker.
+     *
+     * @return string what was checked; throws on failure
+     */
+    public function checkImap(Mailbox $mailbox): string
+    {
+        $client = $this->imap($mailbox);
+        try {
+            return \sprintf('Connexion IMAP réussie, dossier « %s ».', ImapClient::decodeName($client->resolveSentFolder($mailbox->getImapSentFolder())));
+        } finally {
+            $client->logout();
+        }
+    }
+
+    private static function checkTransport(TransportInterface $transport): string
+    {
+        if (!$transport instanceof SmtpTransport) {
+            return 'Configuration lue. Un fournisseur ne peut être vérifié qu’en envoyant un email de test.';
+        }
+        $transport->start();
+        $transport->stop();
+
+        return 'Connexion et authentification SMTP réussies.';
     }
 
     private function imap(Mailbox $mailbox): ImapClient

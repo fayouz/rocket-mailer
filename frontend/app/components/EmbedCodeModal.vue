@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Application } from '~/types/api'
+import type { Application, ApplicationSender } from '~/types/api'
 
 /**
  * "Intégrer": the code to paste in a calling application, for one of the declared applications,
@@ -20,11 +20,16 @@ const { data: applications, status, execute } = useAsyncData(
   () => api<Application[]>('/api/applications', { query: { itemsPerPage: 200 } }),
   { immediate: false, default: () => [] },
 )
+const { data: senders, execute: loadSenders } = useAsyncData(
+  'embed-application-senders',
+  () => api<ApplicationSender[]>('/api/application_senders', { query: { itemsPerPage: 200 } }),
+  { immediate: false, default: () => [] },
+)
 
 const selectedId = ref<string | undefined>(props.applicationId)
 watch(open, async (value) => {
   if (!value) return
-  await execute()
+  await Promise.all([execute(), loadSenders()])
   if (props.applicationId) selectedId.value = props.applicationId
   // Default: the most recently used application that can embed the composer.
   const usable = applications.value
@@ -47,7 +52,9 @@ const warnings = computed(() => {
   if (!app.enabled) list.push('Cette application est désactivée : le composeur refusera de s’afficher.')
   if (!app.canImpersonate) list.push('« Peut agir en tant qu’utilisateur » est désactivé : l’application ne peut pas obtenir de jeton pour le composeur.')
   if (!app.allowedOrigins.length) list.push('Aucune origine autorisée : ajoutez l’origine de l’application appelante (ex. https://crm.exemple.com).')
-  if (props.draft?.from && !app.allowedSenders.length) list.push('Le brouillon impose une adresse « De » : elle doit être proposée à l’utilisateur ou autorisée pour l’application.')
+  const sender = senders.value.find(s => s.id === app.id)
+  if (!sender?.senderEmail) list.push('L’application n’a pas d’expéditeur : configurez-le (Applications → Modifier), sinon ses envois sont refusés.')
+  if (props.draft?.from && !sender?.allowedSenders.length) list.push('Le brouillon impose une adresse « De » : elle doit être proposée à l’utilisateur ou autorisée pour l’application.')
   return list
 })
 

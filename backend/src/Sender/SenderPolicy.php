@@ -2,13 +2,15 @@
 
 namespace App\Sender;
 
-use App\Entity\Application;
 use App\Entity\Mailbox;
 use App\Entity\SenderAddress;
-use App\Entity\User;
+use App\Repository\ApplicationSenderRepository;
 use App\Repository\MailboxRepository;
 use App\Repository\SenderAddressRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Rocket\Core\Entity\Application;
+use Rocket\Core\Entity\User;
+use Rocket\Core\Settings\Settings;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\Mime\Address;
@@ -28,9 +30,15 @@ use Symfony\Component\Mime\Address;
  */
 final class SenderPolicy
 {
+    /** Setting: users may send from their own address. */
+    public const PERSONAL_FROM_ALLOWED = 'sender.personal_allowed';
+    /** Setting: the sender addresses were seeded from MAILER_DEFAULT_FROM. */
+    public const SENDERS_INITIALIZED = 'sender.initialized';
+
     public function __construct(
         private readonly SenderAddressRepository $senders,
         private readonly MailboxRepository $mailboxes,
+        private readonly ApplicationSenderRepository $applicationSenders,
         private readonly Settings $settings,
         private readonly EntityManagerInterface $em,
         #[Autowire(env: 'MAILER_DEFAULT_FROM')] private readonly string $installDefault,
@@ -57,7 +65,7 @@ final class SenderPolicy
         ], $this->senders());
 
         $hasSettingsDefault = [] !== array_filter($options, static fn (array $o) => $o['default']);
-        if ($this->settings->isPersonalFromAllowed() && !\in_array($user->getEmail(), array_column($options, 'email'), true)) {
+        if ($this->isPersonalFromAllowed() && !\in_array($user->getEmail(), array_column($options, 'email'), true)) {
             $options[] = [
                 'from' => AddressFormatter::format(self::personal($user)),
                 'email' => $user->getEmail(),
@@ -81,12 +89,13 @@ final class SenderPolicy
     private function applicationOptions(Application $application): array
     {
         $options = [];
-        $sender = $application->getSenderAddress();
+        $appSender = $this->applicationSenders->forApplication($application);
+        $sender = $appSender->getSenderAddress();
         if (null !== $sender) {
             $options[] = [
                 'from' => AddressFormatter::format($sender),
                 'email' => $sender->getAddress(),
-                'name' => $application->getSenderName(),
+                'name' => $appSender->getSenderName(),
                 'default' => true,
                 'source' => 'application',
             ];
@@ -130,10 +139,11 @@ final class SenderPolicy
         $name = $address->getName();
 
         if (null !== $application) {
-            if ($email === $application->getSenderEmail()) {
-                return new Address($email, '' !== $name ? $name : ($application->getSenderName() ?? ''));
+            $appSender = $this->applicationSenders->forApplication($application);
+            if ($email === $appSender->getSenderEmail()) {
+                return new Address($email, '' !== $name ? $name : ($appSender->getSenderName() ?? ''));
             }
-            if ($application->allowsSender($email)) {
+            if ($appSender->allowsSender($email)) {
                 return new Address($email, $name);
             }
 
@@ -146,7 +156,7 @@ final class SenderPolicy
             }
         }
 
-        if ($email === $user->getEmail() && $this->settings->isPersonalFromAllowed()) {
+        if ($email === $user->getEmail() && $this->isPersonalFromAllowed()) {
             return new Address($email, '' !== $name ? $name : $user->getDisplayName());
         }
 
@@ -155,10 +165,15 @@ final class SenderPolicy
 
     private function applicationDefault(Application $application): Address
     {
-        return $application->getSenderAddress() ?? throw new UnprocessableEntityHttpException(\sprintf(
+        return $this->applicationSenders->forApplication($application)->getSenderAddress() ?? throw new UnprocessableEntityHttpException(\sprintf(
             'The application "%s" has no sender configured: an administrator must set it (Applications), or pass "from" or "mailbox".',
             $application->getName(),
         ));
+    }
+
+    public function isPersonalFromAllowed(): bool
+    {
+        return (bool) $this->settings->get(self::PERSONAL_FROM_ALLOWED, true);
     }
 
     private function defaultFor(User $user): Address
@@ -169,7 +184,7 @@ final class SenderPolicy
             }
         }
 
-        if ($this->settings->isPersonalFromAllowed()) {
+        if ($this->isPersonalFromAllowed()) {
             return self::personal($user);
         }
 
@@ -187,14 +202,14 @@ final class SenderPolicy
     /** On first use, the address from MAILER_DEFAULT_FROM becomes the default sender (once: admins may then remove it). */
     private function initialize(): void
     {
-        if ($this->settings->get(Settings::SENDERS_INITIALIZED, false)) {
+        if ($this->settings->get(self::SENDERS_INITIALIZED, false)) {
             return;
         }
 
         if ('' !== trim($this->installDefault) && 0 === $this->senders->count([])) {
             $this->em->persist(SenderAddress::fromAddress(Address::create(trim($this->installDefault)), true));
         }
-        $this->settings->set(Settings::SENDERS_INITIALIZED, true);
+        $this->settings->set(self::SENDERS_INITIALIZED, true);
         $this->em->flush();
     }
 

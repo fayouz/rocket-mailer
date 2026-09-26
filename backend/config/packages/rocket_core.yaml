@@ -1,0 +1,4 @@
+rocket_core:
+    app_name: Rocket Mailer
+    app_id: mailer
+    token_prefix: rma_
