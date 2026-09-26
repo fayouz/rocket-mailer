@@ -27,7 +27,10 @@ final class Version20260925173301 extends AbstractMigration
         $this->addSql('ALTER TABLE authentication_server ADD link_existing_accounts BOOLEAN DEFAULT false NOT NULL');
         $this->addSql('ALTER TABLE "user" ADD external_id VARCHAR(255) DEFAULT NULL');
         $this->addSql('CREATE UNIQUE INDEX uniq_user_external_id ON "user" (authentication_server_id, external_id)');
-        $this->addSql('ALTER INDEX idx_8f1a7e8f4c1e9a2 RENAME TO IDX_8D93D649C2F36C49');
+        // Already renamed on the databases of main (Version20260925214733).
+        if ($schema->getTable('user')->hasIndex('idx_8f1a7e8f4c1e9a2')) {
+            $this->addSql('ALTER INDEX idx_8f1a7e8f4c1e9a2 RENAME TO IDX_8D93D649C2F36C49');
+        }
     }
 
     public function down(Schema $schema): void

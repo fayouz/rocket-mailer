@@ -14,7 +14,9 @@ use App\Repository\MailboxRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Rocket\Core\Command\DemoSeederInterface;
 use Rocket\Core\Entity\Application;
+use Rocket\Core\Entity\ColorPalette;
 use Rocket\Core\Repository\ApplicationRepository;
+use Rocket\Core\Repository\ColorPaletteRepository;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -33,6 +35,7 @@ final class MailerDemoSeeder implements DemoSeederInterface
         private readonly MailboxRepository $mailboxes,
         private readonly EmailLayoutRepository $layouts,
         private readonly SecretBox $secrets,
+        private readonly ColorPaletteRepository $palettes,
         #[Autowire(env: 'DEMO_APP_TOKEN')] private readonly string $demoAppToken,
         #[Autowire(env: 'DEMO_HOST_ORIGIN')] private readonly string $demoHostOrigin,
         #[Autowire(env: 'DEMO_MAILBOX_SMTP')] private readonly string $demoMailboxSmtp,
@@ -54,6 +57,11 @@ final class MailerDemoSeeder implements DemoSeederInterface
                 ->setSenderEmail('contact@crm.example.org')
                 ->setSenderName('Démo CRM')
                 ->setAllowedSenders(['*@crm.example.org']));
+            // Its embedded composer matches the Demo CRM's indigo header; Rocket Mailer keeps its default colors.
+            $palette = $this->palettes->findOneBy(['name' => 'Démo CRM']) ?? (new ColorPalette())->setName('Démo CRM');
+            $palette->setPrimary('#4338ca')->setNeutral('slate');
+            $this->em->persist($palette);
+            $application->setPalette($palette);
         }
 
         // Rocket Cloud, in the suite: it sends its share notifications with a token of Rocket Auth (client

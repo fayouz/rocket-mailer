@@ -107,6 +107,10 @@ Sécurité du composeur embarqué :
 - Une application n'envoie jamais depuis ces adresses : elle a son propre **expéditeur** (réglages d'expédition de l'application, `GET`/`PATCH /api/application_senders/{id}`, administrateurs).
 - Une application peut imposer l'adresse à la volée, avec `setDraft({ from })` ou le champ `from` de l'API, dans la limite de ses **adresses d'expédition autorisées** (`contact@…` ou `*@domaine`). Toute autre adresse est refusée. Les réponses reviennent à l'utilisateur (`Reply-To`).
 
+### Thème et palettes
+- Thème clair, sombre ou système au choix de chaque utilisateur.
+- Palettes de couleurs (Administration → Palettes) : celle du projet habille Rocket Mailer et, par défaut, le composeur embarqué ; chaque application peut avoir la sienne.
+
 ### Version et mises à jour
 - Version affichée en bas du menu (`git describe --tags`, inscrite dans les images par la CI). Administration → **Mises à jour** la compare aux versions publiées sur GitHub (`UPDATE_REPOSITORY`).
 - Bouton **Mettre à jour**, avec trois méthodes au choix :

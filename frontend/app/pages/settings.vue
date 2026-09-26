@@ -148,7 +148,7 @@ async function add() {
           icon="i-lucide-info"
           color="neutral"
           variant="subtle"
-          description="Une application externe peut imposer d'autres adresses, dans la limite de ses « adresses d'expédition autorisées » (page Applications)."
+          description="Ces adresses sont celles de Rocket Mailer : les applications externes ne les utilisent jamais. Chacune a son propre expéditeur (page Applications) ; l'adresse par défaut ci-dessus y est seulement proposée en suggestion."
         />
       </div>
     </template>

@@ -18,18 +18,18 @@ permissions:
 jobs:
   backend:
     name: Backend (PHP)
-    uses: fayouz/rocket-core/.github/workflows/brick-backend.yml@v0.1.0
+    uses: fayouz/rocket-core/.github/workflows/brick-backend.yml@v0.2.1
     with:
       # GreenMail (real SMTP + IMAP server) for the sending mailbox tests: .github/backend-setup.sh
       setup-script: .github/backend-setup.sh
 
   frontend:
     name: Frontend (Nuxt)
-    uses: fayouz/rocket-core/.github/workflows/brick-frontend.yml@v0.1.0
+    uses: fayouz/rocket-core/.github/workflows/brick-frontend.yml@v0.2.1
 
   docs:
     name: Docs (Nuxt Content)
-    uses: fayouz/rocket-core/.github/workflows/brick-frontend.yml@v0.1.0
+    uses: fayouz/rocket-core/.github/workflows/brick-frontend.yml@v0.2.1
     with:
       working-directory: docs
       build-script: generate
@@ -78,7 +78,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: fayouz/rocket-core/.github/workflows/brick-images.yml@v0.1.0
+    uses: fayouz/rocket-core/.github/workflows/brick-images.yml@v0.2.1
     with:
       api-resource: /api/emails
       # The front serves the widget script (embed.js): .github/smoke-test.sh
@@ -87,7 +87,7 @@ jobs:
   demo:
     name: Demo environment (compose)
     needs: [backend, frontend]
-    uses: fayouz/rocket-core/.github/workflows/brick-demo.yml@v0.1.0
+    uses: fayouz/rocket-core/.github/workflows/brick-demo.yml@v0.2.1
     with:
       front-url: http://localhost:3000
       docs-url: http://localhost:3001

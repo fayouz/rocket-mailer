@@ -12,6 +12,8 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
   - comptes créés à la première connexion (source « SSO »), rôle administrateur piloté par la revendication `groups` (optionnel), rattachement des comptes existants seulement pour un fournisseur de confiance ;
   - secret du client chiffré en base, URL interne pour les déploiements Docker, vérification du fournisseur par le worker et sur le tableau de bord ;
   - API : `GET /api/auth/providers`, `POST /api/auth/oidc/callback`, `POST /api/authentication_servers/oidc/test`. Voir la documentation, *Administration → Authentification unique*.
+- **Thème clair, sombre ou système** et **palettes de couleurs**, fournis par rocket-core 0.2 : sélecteur en bas du menu et sur la page de connexion, page Administration → Palettes (palette du projet, et une palette par application pour son composeur embarqué), API `/api/color_palettes`, `/api/theme/project`, `GET /api/theme` (public).
+  - Démo : le composeur de la Démo CRM prend sa palette indigo « Démo CRM ».
 
 - **Santé des boîtes d'envoi et de l'annuaire LDAP** sur le tableau de bord :
   - le worker vérifie toutes les 5 minutes (Symfony Scheduler) chaque boîte active (connexion et authentification SMTP, IMAP si la copie est activée) et le serveur LDAP (authentification du compte de service, lecture de la base) ;

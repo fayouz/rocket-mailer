@@ -25,6 +25,9 @@ curl -fsS -X POST $FRONT/api/ldap/test -H "Authorization: Bearer $TOKEN" -H 'Con
 APP_ID=$(curl -fsS http://localhost:4000/ | grep -o 'applicationId: "[^"]*"' | cut -d'"' -f2)
 curl -fsS "http://localhost:4000/token?user=alice%40example.org" | jq -e .token
 curl -fsSI "$FRONT/embed/compose?app=$APP_ID" | grep -i "frame-ancestors http://localhost:4000"
+# Palettes (rocket-core): Rocket Mailer keeps its default colors, the Demo CRM's composer has its own (public endpoint)
+curl -fsS $FRONT/api/theme | jq -e '.source == "default"'
+curl -fsS "$FRONT/api/theme?app=$APP_ID" | jq -e '.source == "application" and .palette.colors.primary == "#4338ca"'
 curl -fsS http://localhost:8025/ -o /dev/null
 # Documentation site, with the changelog
 curl -fsS $DOCS/changelog | grep -q 'Dernière version'

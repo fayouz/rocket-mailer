@@ -49,6 +49,7 @@ final class DemoSeedCommandTest extends WebTestCase
         self::assertSame(['http://localhost:4000'], $application->getAllowedOrigins());
         $sender = $this->em()->find(ApplicationSender::class, $application->getId());
         self::assertSame(['contact@crm.example.org', 'Démo CRM', ['*@crm.example.org']], [$sender->getSenderEmail(), $sender->getSenderName(), $sender->getAllowedSenders()]);
+        self::assertSame('#4338ca', $application->getPalette()?->getPrimary());
 
         $asAlice = ['X-Impersonate-User' => 'alice@example.org'];
         $this->api('POST', '/api/embed/token', authorization: 'Bearer '.self::DEMO_TOKEN, headers: $asAlice);
