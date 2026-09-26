@@ -4,8 +4,6 @@
 # COMPOSE (docker compose -f compose.yaml -f compose.demo.yaml), FRONT, DOCS (demo front and docs URLs), APP_VERSION.
 # Locally: COMPOSE="docker compose -f compose.yaml -f compose.demo.yaml" FRONT=http://localhost:3000 DOCS=http://localhost:3001 bash -e .github/demo-scenarios.sh
 set -x
-# As the former inline step of the workflow (bash -eo pipefail).
-set -o pipefail
 # Seeded accounts: the first-run setup is closed
 curl -fsS $FRONT/api/setup | jq -e '.required == false'
 # Local account (through the front's same-origin /api proxy, as in Codespaces)
