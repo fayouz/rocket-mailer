@@ -268,7 +268,7 @@ jobs:
             | jq -e '.scope == "platform" and (.daily | length) == 30 and ([.health.services[] | select(.id == "database" or .id == "ldap") | .status] == ["operational", "operational"])'
           DEMO_TOKEN=rma_demo_rocket_mailer_do_not_use_in_production
           # The demo application (Démo CRM) has its own sender settings, managed by administrators
-          curl -fsS $FRONT/api/application_senders -H "Authorization: Bearer $TOKEN" \
+          curl -fsS $FRONT/api/application_senders -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
             | jq -e 'map(select(.senderEmail == "contact@crm.example.org" and .allowedSenders == ["*@crm.example.org"])) | length == 1'
           # An application sends from its own sender, never from the platform's addresses
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST $FRONT/api/emails -H "Authorization: Bearer $DEMO_TOKEN" \
