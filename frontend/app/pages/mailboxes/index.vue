@@ -50,12 +50,19 @@ const columns: TableColumn<Mailbox>[] = [
       : h('span', { class: 'text-muted' }, '—'),
   },
   {
+    id: 'inbox',
+    header: 'Boîte partagée',
+    cell: ({ row }) => row.original.inboxEnabled
+      ? h(UBadge, { variant: 'subtle', color: row.original.inboxError ? 'error' : 'success', label: row.original.inboxError ? 'Relève en erreur' : 'Réception active', title: row.original.inboxError ?? undefined })
+      : h('span', { class: 'text-muted' }, '—'),
+  },
+  {
     id: 'usage',
     header: 'Proposée à',
     cell: ({ row }) => h('div', { class: 'flex flex-wrap gap-1' }, [
       ...(row.original.availableToUsers ? [h(UBadge, { variant: 'subtle', color: 'primary', label: 'Tous les utilisateurs' })] : []),
       ...row.original.applications.map(iri => h(UBadge, { variant: 'outline', color: 'neutral', label: applicationName(iri) })),
-      ...(!row.original.availableToUsers && !row.original.applications.length ? [h('span', { class: 'text-muted' }, 'Personne')] : []),
+      ...(!row.original.availableToUsers && !row.original.applications.length ? [h('span', { class: 'text-muted' }, 'Ses membres')] : []),
     ]),
   },
   {
@@ -66,6 +73,7 @@ const columns: TableColumn<Mailbox>[] = [
   {
     id: 'actions',
     cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
+      h(UButton, { 'icon': 'i-lucide-users', 'color': 'neutral', 'variant': 'ghost', 'aria-label': 'Membres de la boîte partagée', 'onClick': () => (membersOf.value = row.original) }),
       h(UButton, { 'icon': 'i-lucide-plug-zap', 'color': 'neutral', 'variant': 'ghost', 'aria-label': 'Tester la connexion', 'onClick': () => openTest(row.original) }),
       h(UButton, { 'icon': 'i-lucide-pencil', 'color': 'neutral', 'variant': 'ghost', 'aria-label': 'Modifier', 'onClick': () => edit(row.original) }),
       h(UButton, { 'icon': 'i-lucide-trash-2', 'color': 'error', 'variant': 'ghost', 'aria-label': 'Supprimer', 'onClick': () => (toDelete.value = row.original) }),
@@ -81,6 +89,7 @@ function emptyForm() {
     smtpHost: '', smtpPort: 587, smtpEncryption: 'starttls' as Mailbox['smtpEncryption'], smtpUsername: '', smtpPassword: '',
     dsn: '',
     imapEnabled: true, imapHost: '', imapPort: 993, imapEncryption: 'ssl' as Mailbox['imapEncryption'], imapUsername: '', imapPassword: '', imapSentFolder: '',
+    inboxEnabled: false,
     availableToUsers: false, applications: [] as string[],
   }
 }
@@ -194,6 +203,10 @@ async function runTest(send: boolean) {
   }
 }
 
+// --- Members ----------------------------------------------------------------------------------
+
+const membersOf = ref<Mailbox | null>(null)
+
 // --- Delete -----------------------------------------------------------------------------------
 
 const toDelete = ref<Mailbox | null>(null)
@@ -290,9 +303,15 @@ async function remove() {
               <UInput v-model="form.dsn" type="password" autocomplete="off" class="w-full font-mono" />
             </UFormField>
 
-            <USeparator label="Copie dans « Envoyés » (IMAP)" />
+            <USeparator label="IMAP : copie dans « Envoyés » et réception" />
             <USwitch v-model="form.imapEnabled" label="Ranger une copie de chaque email dans la boîte" />
-            <div v-if="form.imapEnabled" class="grid gap-3 sm:grid-cols-3">
+            <USwitch
+              v-model="form.inboxEnabled"
+              label="Boîte partagée : relever les messages reçus"
+              description="Les nouveaux messages de la boîte de réception sont relevés (sans les modifier sur le serveur) et répartis en conversations, visibles par ses membres."
+              data-testid="mailbox-inbox"
+            />
+            <div v-if="form.imapEnabled || form.inboxEnabled" class="grid gap-3 sm:grid-cols-3">
               <UFormField label="Serveur IMAP" required class="sm:col-span-2">
                 <UInput v-model="form.imapHost" placeholder="imap.exemple.com" class="w-full" />
               </UFormField>
@@ -308,7 +327,7 @@ async function remove() {
               <UFormField label="Mot de passe" :hint="editing?.hasImapPassword ? 'Vide : inchangé' : 'Vide : celui du SMTP'">
                 <UInput v-model="form.imapPassword" type="password" autocomplete="new-password" class="w-full" />
               </UFormField>
-              <UFormField label="Dossier" hint="Vide : détecté" class="sm:col-span-3">
+              <UFormField v-if="form.imapEnabled" label="Dossier des copies" hint="Vide : détecté" class="sm:col-span-3">
                 <UInput v-model="form.imapSentFolder" placeholder="Envoyés, Sent, [Gmail]/Messages envoyés…" class="w-full" />
               </UFormField>
             </div>
@@ -326,6 +345,9 @@ async function remove() {
               />
             </UFormField>
             <USwitch v-model="form.availableToUsers" label="Proposée aussi à tous les utilisateurs de Rocket Mailer" />
+            <p class="text-xs text-muted">
+              Les membres de la boîte (bouton <UIcon name="i-lucide-users" class="align-middle" />) peuvent toujours envoyer depuis elle et, si la réception est active, lire et répondre à ses conversations.
+            </p>
           </form>
         </template>
         <template #footer>
@@ -371,6 +393,12 @@ async function remove() {
           </div>
         </template>
       </UModal>
+
+      <MailboxMembersModal
+        :mailbox="membersOf ? { id: membersOf.id, name: membersOf.name } : null"
+        :note="membersOf && !membersOf.inboxEnabled ? 'La réception n’est pas activée : les membres peuvent déjà envoyer depuis cette boîte.' : undefined"
+        @close="membersOf = null"
+      />
 
       <UModal :open="toDelete !== null" title="Supprimer la boîte d’envoi ?" :description="toDelete ? `« ${toDelete.name} » ne sera plus proposée. Les emails déjà envoyés gardent son nom.` : ''" @update:open="(value: boolean) => { if (!value) toDelete = null }">
         <template #footer>

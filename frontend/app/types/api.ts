@@ -91,10 +91,99 @@ export interface Mailbox extends Tracked {
   imapUsername: string | null
   hasImapPassword: boolean
   imapSentFolder: string | null
+  /** Shared inbox: the new messages of its IMAP INBOX are fetched into conversations. */
+  inboxEnabled: boolean
+  inboxFetchedAt: string | null
+  inboxError: string | null
   availableToUsers: boolean
   enabled: boolean
   /** Application IRIs. */
   applications: string[]
+}
+
+/** GET /api/inbox/mailboxes: a shared inbox of the current user. */
+export interface InboxMailbox {
+  id: string
+  name: string
+  email: string
+  role: 'member' | 'manager'
+  unread: number
+  open: number
+  fetchedAt: string | null
+  error: string | null
+}
+
+export interface InboxPerson {
+  id: string
+  email: string
+  displayName: string
+}
+
+export interface InboxMember {
+  id: string
+  role: 'member' | 'manager'
+  user: InboxPerson
+}
+
+export interface ConversationSummary {
+  id: string
+  subject: string
+  status: 'open' | 'closed'
+  assignee: InboxPerson | null
+  participants: string[]
+  lastFrom: string
+  snippet: string
+  messageCount: number
+  lastMessageAt: string
+  lastActivityAt: string
+  unread: boolean
+}
+
+export interface InboundItem {
+  type: 'inbound'
+  id: string
+  at: string
+  receivedAt: string
+  from: string
+  fromName: string | null
+  replyTo: string | null
+  to: string[]
+  cc: string[]
+  subject: string
+  text: string
+  /** Sanitized by the server; without remote images unless asked (?images=1). */
+  html: string | null
+  hasRemoteImages: boolean
+  attachments: { id: string, filename: string, mimeType: string, size: number }[]
+}
+
+export interface ReplyItem {
+  type: 'reply'
+  id: string
+  at: string
+  author: InboxPerson | null
+  to: string[]
+  cc: string[]
+  subject: string
+  html: string
+  status: 'queued' | 'sent' | 'failed'
+  error: string | null
+}
+
+export interface NoteItem {
+  type: 'note'
+  id: string
+  at: string
+  author: InboxPerson | null
+  body: string
+}
+
+export type ConversationItem = InboundItem | ReplyItem | NoteItem
+
+export interface ConversationDetail extends ConversationSummary {
+  mailbox: { id: string, name: string, email: string }
+  members: InboxPerson[]
+  items: ConversationItem[]
 }
 
 export interface MailboxTestResult {
