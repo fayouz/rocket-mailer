@@ -57,5 +57,13 @@ final class DemoSeedCommandTest extends WebTestCase
         $email = $this->api('POST', '/api/emails', ['to' => ['client@example.com'], 'subject' => 'Démo', 'htmlBody' => '<p>ok</p>'], 'Bearer '.self::DEMO_TOKEN, $asAlice);
         $this->assertStatus(202);
         self::assertSame('Démo CRM <contact@crm.example.org>', $email['from']);
+
+        // The shared inbox « Contact »: alice is a member, with its demo conversations (seeded once).
+        $alice = 'Bearer '.$this->api('POST', '/api/auth/login', ['email' => DemoSeedCommand::USERS[1][0], 'password' => DemoSeedCommand::USERS[1][1]])['token'];
+        $inboxes = $this->api('GET', '/api/inbox/mailboxes', authorization: $alice);
+        self::assertSame([['Contact', 'member', 3]], array_map(static fn (array $m) => [$m['name'], $m['role'], $m['open']], $inboxes));
+        $conversations = $this->api('GET', '/api/inbox/mailboxes/'.$inboxes[0]['id'].'/conversations', authorization: $alice);
+        self::assertCount(4, $conversations);
+        self::assertCount(1, $this->api('GET', '/api/inbox/mailboxes/'.$inboxes[0]['id'].'/conversations?mine=1', authorization: $alice));
     }
 }

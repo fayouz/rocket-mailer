@@ -160,6 +160,8 @@ final class InboxFetcher
 
         $conversation->recordInbound($message);
         $this->em->persist($message);
+        // Flushed at once: the next message may reply to this one.
+        $this->em->flush();
 
         return $message;
     }
