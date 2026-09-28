@@ -2,7 +2,7 @@
 
 Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le projet respecte le [versionnage sémantique](https://semver.org/lang/fr/).
 
-## [Non publié]
+## [0.7.0] - 2026-09-28
 
 ### Ajouté
 
@@ -227,6 +227,7 @@ Première version.
 - Une application n'obtient jamais le rôle administrateur, même en agissant au nom d'un administrateur.
 - Un jeton d'embed n'accède qu'aux endpoints du composeur, et il est révoqué dès que l'application est désactivée.
 
+[0.7.0]: https://github.com/fayouz/rocket-mailer/releases/tag/v0.7.0
 [0.6.0]: https://github.com/fayouz/rocket-mailer/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/fayouz/rocket-mailer/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/fayouz/rocket-mailer/compare/v0.3.0...v0.4.0
