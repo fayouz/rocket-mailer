@@ -212,4 +212,34 @@ final class MailboxTest extends WebTestCase
 
         return $message;
     }
+
+    /** The IMAP side of the shared inboxes, against GreenMail: EXAMINE, UID SEARCH, sizes, BODY.PEEK[] literals. */
+    public function testImapInboxSourceFetchesNewMessagesByUid(): void
+    {
+        $host = $this->greenmail();
+        $admin = $this->admin();
+        $mailbox = $this->createMailbox($admin, ['host' => $host, 'email' => 'inbox-'.bin2hex(random_bytes(3)).'@crm.example.org']);
+
+        $client = new ImapClient();
+        $client->connect($host, 3143, 'none');
+        $client->login('commercial', 'secret-pass');
+        $validity = $client->examine('INBOX');
+        $before = $client->uidsAfter(0);
+        $last = [] === $before ? 0 : max($before);
+        $marker = bin2hex(random_bytes(4));
+        $client->append('INBOX', "From: client@example.com\r\nTo: commercial@crm.example.org\r\nSubject: Inbox {$marker}\r\nMessage-ID: <{$marker}@example.com>\r\n\r\nLigne 1\r\n{brace} \"quote\"\r\n");
+        $client->logout();
+
+        $entity = $this->em()->getRepository(\App\Entity\Mailbox::class)->find($mailbox['id']);
+        $source = static::getContainer()->get(\App\Inbox\ImapInboxSource::class);
+        $batch = $source->fetch($entity, $validity, $last, 1_000_000, 10);
+        self::assertSame($validity, $batch->uidValidity);
+        self::assertCount(1, $batch->messages);
+        self::assertStringContainsString("Subject: Inbox {$marker}", (string) $batch->messages[0]->raw);
+        self::assertStringContainsString('{brace} "quote"', (string) $batch->messages[0]->raw);
+
+        // Too large: listed without its content. Nothing newer: empty.
+        self::assertNull($source->fetch($entity, $validity, $last, 10, 10)->messages[0]->raw);
+        self::assertSame([], $source->fetch($entity, $validity, $batch->messages[0]->uid, 1_000_000, 10)->messages);
+    }
 }

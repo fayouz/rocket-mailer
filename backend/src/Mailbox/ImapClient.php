@@ -3,8 +3,9 @@
 namespace App\Mailbox;
 
 /**
- * Minimal IMAP4rev1 client (RFC 3501): what a sending mailbox needs, i.e. log in, find or create the
- * "Sent" folder and APPEND a copy of each email. Plain sockets, no ext-imap (removed from PHP 8.4).
+ * Minimal IMAP4rev1 client (RFC 3501): what a mailbox needs, i.e. log in, find or create the "Sent" folder and
+ * APPEND a copy of each email; for a shared inbox, SELECT the INBOX and fetch new messages by UID.
+ * Plain sockets, no ext-imap (removed from PHP 8.4).
  */
 final class ImapClient
 {
@@ -116,6 +117,93 @@ final class ImapClient
         }
         $this->write($message."\r\n");
         $this->readUntilTagged($tag);
+    }
+
+    /**
+     * Opens a folder read-only (EXAMINE: fetching never changes the \Seen flags of the other clients).
+     *
+     * @return int its UIDVALIDITY
+     */
+    public function examine(string $folder): int
+    {
+        foreach ($this->command('EXAMINE '.self::quote($folder)) as $line) {
+            if (preg_match('/\[UIDVALIDITY (\d+)\]/i', $line, $m)) {
+                return (int) $m[1];
+            }
+        }
+
+        throw new ImapException('The server did not give the UIDVALIDITY of '.$folder.'.');
+    }
+
+    /**
+     * UIDs of the selected folder greater than $afterUid, ascending.
+     *
+     * @return list<int>
+     */
+    public function uidsAfter(int $afterUid): array
+    {
+        $uids = [];
+        foreach ($this->command(\sprintf('UID SEARCH UID %d:*', $afterUid + 1)) as $line) {
+            if (preg_match('/^\* SEARCH\b(.*)$/i', $line, $m)) {
+                foreach (preg_split('/\s+/', trim($m[1])) ?: [] as $uid) {
+                    // "n:*" always includes the last message, even when its UID is lower.
+                    if (ctype_digit($uid) && (int) $uid > $afterUid) {
+                        $uids[] = (int) $uid;
+                    }
+                }
+            }
+        }
+        sort($uids);
+
+        return array_values(array_unique($uids));
+    }
+
+    /**
+     * Sizes of messages of the selected folder.
+     *
+     * @param list<int> $uids
+     *
+     * @return array<int, int> uid => size in bytes
+     */
+    public function sizes(array $uids): array
+    {
+        if ([] === $uids) {
+            return [];
+        }
+        $sizes = [];
+        foreach ($this->command('UID FETCH '.implode(',', $uids).' (UID RFC822.SIZE)') as $line) {
+            if (preg_match('/UID (\d+)/i', $line, $u) && preg_match('/RFC822\.SIZE (\d+)/i', $line, $sz)) {
+                $sizes[(int) $u[1]] = (int) $sz[1];
+            }
+        }
+
+        return $sizes;
+    }
+
+    /** Raw RFC 5322 message of the selected folder (BODY.PEEK: not marked as read), null if it vanished. */
+    public function fetchRaw(int $uid): ?string
+    {
+        $tag = $this->nextTag();
+        $this->write(\sprintf("%s UID FETCH %d (UID BODY.PEEK[])\r\n", $tag, $uid));
+        $raw = null;
+        while (true) {
+            $line = $this->readLine();
+            if (str_starts_with($line, $tag.' ')) {
+                if (!preg_match('/^'.preg_quote($tag, '/').' OK/i', $line)) {
+                    throw new ImapException(trim(substr($line, \strlen($tag) + 1)));
+                }
+
+                return $raw;
+            }
+            // Literal: the message itself ("BODY[] {n}"), then the rest of the response line.
+            while (preg_match('/\{(\d+)\}$/', $line, $m)) {
+                $data = $this->readBytes((int) $m[1]);
+                if (null === $raw && preg_match('/BODY\[\]\s*\{\d+\}$/i', $line)) {
+                    $raw = $data;
+                }
+                $line = $this->readLine();
+            }
+        }
     }
 
     public function logout(): void

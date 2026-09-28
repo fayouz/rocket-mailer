@@ -150,6 +150,28 @@ class Mailbox
     #[Groups(['mailbox:read', 'mailbox:write'])]
     private bool $enabled = true;
 
+    /** Shared inbox: new messages of the IMAP INBOX are fetched into conversations (see App\Inbox). */
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['mailbox:read', 'mailbox:write'])]
+    private bool $inboxEnabled = false;
+
+    /** UIDVALIDITY of the INBOX when it was last fetched: a change means the UIDs were renumbered. */
+    #[ORM\Column(type: Types::BIGINT, nullable: true)]
+    private ?string $inboxUidValidity = null;
+
+    /** Highest UID fetched from the INBOX. */
+    #[ORM\Column(type: Types::BIGINT, options: ['default' => 0])]
+    private string $inboxLastUid = '0';
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['mailbox:read'])]
+    private ?\DateTimeImmutable $inboxFetchedAt = null;
+
+    /** Why the last fetch failed (null: it succeeded). */
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['mailbox:read'])]
+    private ?string $inboxError = null;
+
     /** @var Collection<int, Application> */
     #[ORM\ManyToMany(targetEntity: Application::class)]
     #[ORM\JoinTable(name: 'mailbox_application')]
@@ -430,6 +452,57 @@ class Mailbox
         return $this;
     }
 
+    public function isInboxEnabled(): bool
+    {
+        return $this->inboxEnabled;
+    }
+
+    public function setInboxEnabled(bool $inboxEnabled): static
+    {
+        $this->inboxEnabled = $inboxEnabled;
+
+        return $this;
+    }
+
+    public function getInboxUidValidity(): ?int
+    {
+        return null === $this->inboxUidValidity ? null : (int) $this->inboxUidValidity;
+    }
+
+    public function getInboxLastUid(): int
+    {
+        return (int) $this->inboxLastUid;
+    }
+
+    /** Records a successful fetch: the INBOX state and the time. */
+    public function markInboxFetched(int $uidValidity, int $lastUid): static
+    {
+        $this->inboxUidValidity = (string) $uidValidity;
+        $this->inboxLastUid = (string) $lastUid;
+        $this->inboxFetchedAt = new \DateTimeImmutable();
+        $this->inboxError = null;
+
+        return $this;
+    }
+
+    public function markInboxFailed(string $error): static
+    {
+        $this->inboxFetchedAt = new \DateTimeImmutable();
+        $this->inboxError = mb_substr($error, 0, 2000);
+
+        return $this;
+    }
+
+    public function getInboxFetchedAt(): ?\DateTimeImmutable
+    {
+        return $this->inboxFetchedAt;
+    }
+
+    public function getInboxError(): ?string
+    {
+        return $this->inboxError;
+    }
+
     /** @return Collection<int, Application> */
     public function getApplications(): Collection
     {
@@ -510,6 +583,9 @@ class Mailbox
         }
         if ($this->imapEnabled && null === $this->imapHost) {
             $context->buildViolation('The IMAP server is required to keep a copy of sent emails.')->atPath('imapHost')->addViolation();
+        }
+        if ($this->inboxEnabled && null === $this->imapHost) {
+            $context->buildViolation('The IMAP server is required to receive emails in a shared inbox.')->atPath('imapHost')->addViolation();
         }
     }
 

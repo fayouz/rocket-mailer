@@ -21,7 +21,7 @@ use Symfony\Component\Mime\Address;
  * In Rocket Mailer itself:
  * - the sender addresses of the settings (one is the default, seeded from MAILER_DEFAULT_FROM at install);
  * - the user's own address, unless disabled in the settings;
- * - the sending mailboxes available to all users.
+ * - the sending mailboxes available to all users, and the shared inboxes the user is a member of.
  *
  * Through an application (API, embedded composer), never the platform's addresses, only what the application configured:
  * - its own sender (the default);
@@ -77,8 +77,8 @@ final class SenderPolicy
 
         usort($options, static fn (array $a, array $b) => $b['default'] <=> $a['default']);
 
-        // Sending mailboxes shared with all users, after the addresses.
-        foreach ($this->mailboxes->usableBy(null) as $mailbox) {
+        // Sending mailboxes shared with all users and the user's shared inboxes, after the addresses.
+        foreach ($this->mailboxes->usableByUser($user) as $mailbox) {
             $options[] = self::mailboxOption($mailbox, false);
         }
 
