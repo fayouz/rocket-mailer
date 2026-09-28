@@ -14,6 +14,7 @@ use App\Inbox\InboxFetcher;
 use App\Inbox\InboxReplier;
 use App\Inbox\MessageSanitizer;
 use App\Repository\ConversationRepository;
+use App\Repository\MailboxRepository;
 use App\Repository\MailboxMemberRepository;
 use App\Security\MailboxVoter;
 use Doctrine\ORM\EntityManagerInterface;
@@ -33,7 +34,8 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * Shared inboxes (/api/inbox): the mailboxes the user is a member of, their conversations, replies, notes,
- * assignment and status. Access: MailboxVoter (members only, never through an application).
+ * assignment and status. Access: MailboxVoter. Applications (see ApplicationScopeGuard, MailboxVoter::API) list the
+ * conversations, read them and reply: for themselves in the shared inboxes attached to them, or impersonating a member.
  */
 #[Route('/api/inbox')]
 final class InboxController extends AbstractController
@@ -47,14 +49,26 @@ final class InboxController extends AbstractController
     ) {
     }
 
-    /** Shared inboxes of the current user, with their unread and open conversations. */
+    /**
+     * Shared inboxes of the current user, with their unread and open conversations.
+     * An application acting for itself: the shared inboxes attached to it (role "application", unread 0).
+     */
     #[Route('/mailboxes', name: 'api_inbox_mailboxes', methods: ['GET'])]
-    public function mailboxes(): JsonResponse
+    public function mailboxes(MailboxRepository $mailboxes): JsonResponse
     {
-        $user = $this->user();
+        $user = $this->apiUser();
+        $entries = [];
+        if (null === $user) {
+            foreach ($mailboxes->usableBy($this->actor->getApplication()) as $mailbox) {
+                $entries[] = [$mailbox, 'application'];
+            }
+        } else {
+            foreach ($this->members->forUser($user) as $membership) {
+                $entries[] = [$membership->getMailbox(), $membership->getRole()];
+            }
+        }
         $list = [];
-        foreach ($this->members->forUser($user) as $membership) {
-            $mailbox = $membership->getMailbox();
+        foreach ($entries as [$mailbox, $role]) {
             if (!$mailbox->isInboxEnabled()) {
                 continue;
             }
@@ -62,8 +76,8 @@ final class InboxController extends AbstractController
                 'id' => $mailbox->getId()->toRfc4122(),
                 'name' => $mailbox->getName(),
                 'email' => $mailbox->getEmail(),
-                'role' => $membership->getRole(),
-                'unread' => $this->conversations->countUnread($mailbox, $user),
+                'role' => $role,
+                'unread' => null === $user ? 0 : $this->conversations->countUnread($mailbox, $user),
                 'open' => $this->conversations->countOpen($mailbox),
                 'fetchedAt' => $mailbox->getInboxFetchedAt()?->format(\DATE_ATOM),
                 'error' => $mailbox->getInboxError(),
@@ -73,18 +87,25 @@ final class InboxController extends AbstractController
         return $this->json($list);
     }
 
-    /** ?status=open|closed, ?mine=1 (assigned to me), ?q= (subject, sender, text). */
+    /**
+     * ?status=open|closed, ?mine=1 (assigned to me), ?q= (subject, sender, text),
+     * ?participant=<email> (exact address, any participant), ?externalRef=<reference of the application>.
+     */
     #[Route('/mailboxes/{id}/conversations', name: 'api_inbox_conversations', methods: ['GET'])]
     public function conversations(Mailbox $mailbox, Request $request): JsonResponse
     {
-        $this->denyAccessUnlessGranted(MailboxVoter::READ, $mailbox);
+        $this->denyAccessUnlessGranted(MailboxVoter::API, $mailbox);
         $status = $request->query->getString('status');
+        $participant = mb_strtolower(trim($request->query->getString('participant')));
+        $externalRef = trim($request->query->getString('externalRef'));
         $rows = $this->conversations->search(
             $mailbox,
-            $this->user(),
+            $this->apiUser(),
             \in_array($status, [Conversation::STATUS_OPEN, Conversation::STATUS_CLOSED], true) ? $status : null,
             $request->query->getBoolean('mine'),
             mb_substr($request->query->getString('q'), 0, 100),
+            participant: '' === $participant ? null : mb_substr($participant, 0, 180),
+            externalRef: '' === $externalRef ? null : mb_substr($externalRef, 0, 190),
         );
 
         return $this->json(array_map(fn (array $row) => $this->summary($row[0], $row['unread']), $rows));
@@ -105,9 +126,12 @@ final class InboxController extends AbstractController
     #[Route('/conversations/{id}', name: 'api_inbox_conversation', methods: ['GET'])]
     public function conversation(Conversation $conversation, Request $request): JsonResponse
     {
-        $this->denyAccessUnlessGranted(MailboxVoter::READ, $conversation);
-        $this->conversations->markRead($conversation, $this->user());
-        $this->em->flush();
+        $this->denyAccessUnlessGranted(MailboxVoter::API, $conversation);
+        // Read by a person in Rocket Mailer only: an application reading does not mark it as read.
+        if (null === $this->actor->getApplication()) {
+            $this->conversations->markRead($conversation, $this->user());
+            $this->em->flush();
+        }
 
         return $this->json($this->detail($conversation, $request->query->getBoolean('images')));
     }
@@ -146,16 +170,27 @@ final class InboxController extends AbstractController
         return $this->json(null, Response::HTTP_NO_CONTENT);
     }
 
-    /** { "htmlBody": "…", "to"?: [..], "cc"?: [..] }: sent from the mailbox, threaded. */
+    /**
+     * { "htmlBody": "…", "to"?: [..], "cc"?: [..], "externalRef"?: "…" }: sent from the mailbox, threaded.
+     * "externalRef" is stored on the reply and on the conversation. Supports "Idempotency-Key" (IdempotencyListener).
+     */
     #[Route('/conversations/{id}/reply', name: 'api_inbox_reply', methods: ['POST'])]
     public function reply(Conversation $conversation, Request $request, InboxReplier $replier): JsonResponse
     {
-        $this->denyAccessUnlessGranted(MailboxVoter::READ, $conversation);
+        $this->denyAccessUnlessGranted(MailboxVoter::API, $conversation);
         $payload = $request->toArray();
         $to = isset($payload['to']) && \is_array($payload['to']) && [] !== $payload['to'] ? array_map('strval', $payload['to']) : null;
         $cc = isset($payload['cc']) && \is_array($payload['cc']) ? array_map('strval', $payload['cc']) : [];
-        $email = $replier->reply($conversation, $this->user(), (string) ($payload['htmlBody'] ?? ''), $to, $cc);
-        $this->conversations->markRead($conversation, $this->user());
+        $externalRef = isset($payload['externalRef']) && \is_scalar($payload['externalRef']) ? trim((string) $payload['externalRef']) : null;
+        if (null !== $externalRef && mb_strlen($externalRef) > 190) {
+            throw new UnprocessableEntityHttpException('externalRef: 190 characters at most.');
+        }
+        $application = $this->actor->getApplication();
+        $user = $this->apiUser();
+        $email = $replier->reply($conversation, $user, (string) ($payload['htmlBody'] ?? ''), $to, $cc, $application, '' === $externalRef ? null : $externalRef);
+        if (null === $application) {
+            $this->conversations->markRead($conversation, $this->user());
+        }
         $this->em->flush();
 
         return $this->json($this->replyItem($email), Response::HTTP_ACCEPTED);
@@ -205,6 +240,22 @@ final class InboxController extends AbstractController
         return $this->actor->requireUser();
     }
 
+    /**
+     * The user for the routes open to applications (MailboxVoter::API): null for an application acting for itself.
+     */
+    private function apiUser(): ?User
+    {
+        if ($this->actor->isEmbed()) {
+            throw new AccessDeniedHttpException('Shared inboxes are not available in the embedded composer.');
+        }
+        $user = $this->actor->getUser();
+        if (null === $user && null === $this->actor->getApplication()) {
+            throw new AccessDeniedHttpException('Authentication required.');
+        }
+
+        return $user;
+    }
+
     private function memberUser(Mailbox $mailbox, string $userId): User
     {
         $user = Uuid::isValid($userId) ? $this->em->getRepository(User::class)->find($userId) : null;
@@ -229,6 +280,7 @@ final class InboxController extends AbstractController
             'messageCount' => $conversation->getMessageCount(),
             'lastMessageAt' => $conversation->getLastMessageAt()->format(\DATE_ATOM),
             'lastActivityAt' => $conversation->getLastActivityAt()->format(\DATE_ATOM),
+            'externalRef' => $conversation->getExternalRef(),
             'unread' => $unread,
         ];
     }
@@ -290,6 +342,8 @@ final class InboxController extends AbstractController
             'to' => $email->getTo(),
             'cc' => $email->getCc(),
             'subject' => $email->getSubject(),
+            'application' => $email->getApplication()?->getName(),
+            'externalRef' => $email->getExternalRef(),
             // Written by a member in Rocket Mailer; displayed sanitized like any message.
             'html' => $this->sanitizer->sanitize($email->getHtmlBody())['html'],
             'status' => $email->getStatus()->value,

@@ -81,6 +81,19 @@ for i in $(seq 1 30); do
   sleep 2
 done
 curl -fsS "http://localhost:8025/api/v1/message/$REPLY_ID/headers" | jq -e '."In-Reply-To" == ["<devis-2@demo.example>"]'
+# An application (the demo CRM token) impersonating alice: participant filter, reply with externalRef, Idempotency-Key replay
+curl -fsS "$FRONT/api/inbox/mailboxes/$INBOX_ID/conversations?participant=JULIE.MARTIN@example.com" \
+  -H "Authorization: Bearer $DEMO_TOKEN" -H 'X-Impersonate-User: alice@example.org' -H 'Accept: application/json' \
+  | jq -e --arg id "$CONVERSATION_ID" 'map(.id) | index($id) != null'
+APP_REPLY=$(curl -fsS -X POST "$FRONT/api/inbox/conversations/$CONVERSATION_ID/reply" -H "Authorization: Bearer $DEMO_TOKEN" \
+  -H 'X-Impersonate-User: alice@example.org' -H 'Idempotency-Key: ci-devis-reply' -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -d '{"htmlBody":"<p>CI app reply</p>","externalRef":"ci-quote-20"}' | jq -r .id)
+curl -fsS -D /tmp/ci-replay.txt -X POST "$FRONT/api/inbox/conversations/$CONVERSATION_ID/reply" -H "Authorization: Bearer $DEMO_TOKEN" \
+  -H 'X-Impersonate-User: alice@example.org' -H 'Idempotency-Key: ci-devis-reply' -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -d '{"htmlBody":"<p>CI app reply</p>","externalRef":"ci-quote-20"}' | jq -e --arg id "$APP_REPLY" '.id == $id'
+grep -qi '^idempotent-replayed: true' /tmp/ci-replay.txt
+curl -fsS "$FRONT/api/inbox/mailboxes/$INBOX_ID/conversations?externalRef=ci-quote-20" -H "Authorization: Bearer $ALICE_INBOX" \
+  -H 'Accept: application/json' | jq -e --arg id "$CONVERSATION_ID" '[.[].id] == [$id]'
 # Sending goes through the async worker and reaches Mailpit
 ALICE=$(curl -fsS -X POST $FRONT/api/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -r .token)

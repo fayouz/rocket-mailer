@@ -127,6 +127,7 @@ Sécurité du composeur embarqué :
 - Une boîte d'envoi peut **recevoir** : ses nouveaux messages IMAP sont relevés (worker toutes les 5 minutes, bouton **Relever**, `app:inbox:fetch`) en lecture seule et regroupés en **conversations** (`In-Reply-To`/`References`, sinon sujet et correspondant).
 - Page **Boîtes partagées** : non lus par membre, recherche, filtres (ouvertes, fermées, les miennes), fil, **réponse** depuis la boîte (en-têtes de fil, copie dans « Envoyés »), **assignation**, **fermeture**, **notes internes**.
 - Membres (`member`) et responsables (`manager`) par boîte ; les membres envoient aussi depuis la boîte dans le composeur. HTML nettoyé côté serveur, images distantes bloquées par défaut. Variables : `INBOX_FETCH_INTERVAL`, `INBOX_MAX_MESSAGE_SIZE`. API : `/api/inbox/…`.
+- Applications (PMS, CRM) : lister, lire et répondre dans les boîtes rattachées ou au nom d'un membre, filtres `participant` et `externalRef`, en-tête `Idempotency-Key` (docs *API → Boîtes partagées*).
 
 ### Pièces jointes
 - Dans le composeur (application et widget), avec le bouton **Joindre des fichiers** ou par glisser-déposer : 10 fichiers, 10 Mo par fichier et 25 Mo par email par défaut. Les exécutables et scripts sont refusés.

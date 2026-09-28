@@ -15,6 +15,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity(repositoryClass: ConversationRepository::class)]
 #[ORM\Index(fields: ['mailbox', 'lastMessageAt'])]
 #[ORM\Index(fields: ['mailbox', 'normalizedSubject'])]
+#[ORM\Index(fields: ['mailbox', 'externalRef'])]
 class Conversation
 {
     public const STATUS_OPEN = 'open';
@@ -65,6 +66,10 @@ class Conversation
 
     #[ORM\Column(length: 255)]
     private string $lastFrom = '';
+
+    /** Reference of the application that wrote in this conversation (e.g. a booking id), see InboxReplier. */
+    #[ORM\Column(length: 190, nullable: true)]
+    private ?string $externalRef = null;
 
     public function __construct(Mailbox $mailbox, string $subject, \DateTimeImmutable $at)
     {
@@ -175,6 +180,18 @@ class Conversation
     public function getSnippet(): string
     {
         return $this->snippet;
+    }
+
+    public function getExternalRef(): ?string
+    {
+        return $this->externalRef;
+    }
+
+    public function setExternalRef(?string $externalRef): static
+    {
+        $this->externalRef = $externalRef;
+
+        return $this;
     }
 
     public function getLastFrom(): string

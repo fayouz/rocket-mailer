@@ -150,15 +150,15 @@ final class MailerSection implements DashboardSectionInterface
             'id' => $row['id'],
             'title' => $row['subject'],
             'subtitle' => 'À '.implode(', ', json_decode($row['recipients_to'], true))
-                .($admin ? ' · par '.('' !== $row['sender_name'] ? $row['sender_name'] : $row['sender_email']) : '')
+                .($admin && '' !== $row['sender_email'] ? ' · par '.('' !== $row['sender_name'] ? $row['sender_name'] : $row['sender_email']) : '')
                 .(null !== $row['application_name'] ? ' · via '.$row['application_name'] : ''),
             'at' => DashboardStats::atom($row['created_at']),
             'badge' => self::STATUS[$row['status']][0] ?? $row['status'],
             'badgeColor' => self::STATUS[$row['status']][1] ?? 'neutral',
         ], $this->db->fetchAllAssociative(
             "SELECT e.id, e.subject, e.recipients_to, e.status, e.created_at,
-                    u.email AS sender_email, TRIM(CONCAT(u.first_name, ' ', u.last_name)) AS sender_name, a.name AS application_name
-             FROM email e JOIN \"user\" u ON u.id = e.sender_id LEFT JOIN application a ON a.id = e.application_id
+                    COALESCE(u.email, '') AS sender_email, TRIM(CONCAT(u.first_name, ' ', u.last_name)) AS sender_name, a.name AS application_name
+             FROM email e LEFT JOIN \"user\" u ON u.id = e.sender_id LEFT JOIN application a ON a.id = e.application_id
              WHERE $scope ORDER BY e.created_at DESC, e.id DESC LIMIT 6",
             $params,
         ));
@@ -177,11 +177,11 @@ final class MailerSection implements DashboardSectionInterface
         $events = [];
         foreach ($this->db->fetchAllAssociative(
             "SELECT e.subject, e.status, COALESCE(e.sent_at, e.updated_at) AS at, u.email AS actor, a.name AS application_name
-             FROM email e JOIN \"user\" u ON u.id = e.sender_id LEFT JOIN application a ON a.id = e.application_id
+             FROM email e LEFT JOIN \"user\" u ON u.id = e.sender_id LEFT JOIN application a ON a.id = e.application_id
              WHERE $scope ORDER BY at DESC LIMIT 8",
             $scopeParams,
         ) as $row) {
-            $events[] = self::event('email.'.$row['status'], $row['at'], $row['subject'], $row['actor'].($row['application_name'] ? ' via '.$row['application_name'] : ''), null);
+            $events[] = self::event('email.'.$row['status'], $row['at'], $row['subject'], null === $row['actor'] ? $row['application_name'] : $row['actor'].($row['application_name'] ? ' via '.$row['application_name'] : ''), null);
         }
 
         $templateScope = $admin ? '' : 'AND (t.owner_id = :user OR t.shared)';

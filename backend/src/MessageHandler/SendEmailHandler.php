@@ -52,8 +52,9 @@ final class SendEmailHandler
             return;
         }
 
+        // No sender: a reply of an application acting for itself (always from a mailbox).
         $sender = $email->getSender();
-        $userAddress = new Address($sender->getEmail(), $sender->getDisplayName());
+        $userAddress = null === $sender ? null : new Address($sender->getEmail(), $sender->getDisplayName());
 
         $mime = (new MimeEmail())
             ->subject($email->getSubject())
@@ -76,9 +77,15 @@ final class SendEmailHandler
 
         $mailbox = $email->getMailbox();
         $from = $email->getFromAddress() ?? $userAddress;
+        if (null === $from) {
+            $email->markFailed('No sender address.');
+            $this->em->flush();
+
+            return;
+        }
         $mime->from($from);
         // Replies reach the user when the email leaves from a shared address; a mailbox receives its own replies.
-        if (null === $mailbox && $from->getAddress() !== $sender->getEmail()) {
+        if (null === $mailbox && null !== $userAddress && $from->getAddress() !== $userAddress->getAddress()) {
             $mime->replyTo($userAddress);
         }
 

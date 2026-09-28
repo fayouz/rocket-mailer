@@ -7,6 +7,7 @@ use App\Entity\Mailbox;
 use App\Repository\MailboxMemberRepository;
 use Rocket\Core\Entity\User;
 use Rocket\Core\Security\ActorContext;
+use Rocket\Core\Security\ApplicationUser;
 use Rocket\Core\Security\Roles;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\AccessDecisionManagerInterface;
@@ -14,8 +15,11 @@ use Symfony\Component\Security\Core\Authorization\Voter\Vote;
 use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 
 /**
- * Shared inboxes, only in Rocket Mailer itself (never through an application token or an embedded composer):
- * - INBOX_READ (mailbox or conversation): members read, reply, assign, close; admins included only if members;
+ * Shared inboxes (never through an embedded composer):
+ * - INBOX_READ (mailbox or conversation), in Rocket Mailer only: members read, reply, assign, close, write notes;
+ *   admins included only if members;
+ * - INBOX_API (mailbox or conversation): list, read and reply, also through an application: the application
+ *   itself when the mailbox is attached to it, or an application impersonating a member;
  * - INBOX_MANAGE (mailbox): managers and administrators manage the members.
  *
  * @extends Voter<string, Mailbox|Conversation>
@@ -23,6 +27,7 @@ use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 final class MailboxVoter extends Voter
 {
     public const READ = 'INBOX_READ';
+    public const API = 'INBOX_API';
     public const MANAGE = 'INBOX_MANAGE';
 
     public function __construct(
@@ -34,24 +39,32 @@ final class MailboxVoter extends Voter
 
     protected function supports(string $attribute, mixed $subject): bool
     {
-        return \in_array($attribute, [self::READ, self::MANAGE], true) && ($subject instanceof Mailbox || $subject instanceof Conversation);
+        return \in_array($attribute, [self::READ, self::API, self::MANAGE], true) && ($subject instanceof Mailbox || $subject instanceof Conversation);
     }
 
     protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token, ?Vote $vote = null): bool
     {
-        $user = $token->getUser();
-        if (!$user instanceof User || null !== $this->actor->getApplication() || $this->actor->isEmbed()) {
+        if ($this->actor->isEmbed()) {
             return false;
         }
+        $user = $token->getUser();
+        $application = $this->actor->getApplication();
         $mailbox = $subject instanceof Conversation ? $subject->getMailbox() : $subject;
+        if (self::API === $attribute && $user instanceof ApplicationUser) {
+            // The application itself: only the shared inboxes attached to it.
+            return $mailbox->isEnabled() && $mailbox->isInboxEnabled() && $mailbox->getApplications()->contains($user->getApplication());
+        }
+        if (!$user instanceof User || (null !== $application && self::API !== $attribute)) {
+            return false;
+        }
         if (self::MANAGE === $attribute && $this->decisions->decide($token, [Roles::ADMIN])) {
             return true;
         }
-        if (!$mailbox->isEnabled() || (self::READ === $attribute && !$mailbox->isInboxEnabled())) {
+        if (!$mailbox->isEnabled() || (self::MANAGE !== $attribute && !$mailbox->isInboxEnabled())) {
             return false;
         }
         $membership = $this->members->membership($mailbox, $user);
 
-        return null !== $membership && (self::READ === $attribute || $membership->isManager());
+        return null !== $membership && (self::MANAGE !== $attribute || $membership->isManager());
     }
 }
