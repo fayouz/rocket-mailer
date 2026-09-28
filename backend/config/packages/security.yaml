@@ -39,6 +39,8 @@ security:
         - { path: ^/api/auth/(providers|oidc/callback|oidc/backchannel-logout)$, roles: PUBLIC_ACCESS }
         - { path: ^/api/docs, roles: PUBLIC_ACCESS }
         - { path: ^/api/embed/frame-policy$, roles: PUBLIC_ACCESS }
+        # Called by Google / Microsoft after the consent (the state parameter carries the user).
+        - { path: ^/api/mailboxes/oauth/callback$, roles: PUBLIC_ACCESS }
         - { path: ^/api/?$, roles: PUBLIC_ACCESS }
         - { path: ^/api/theme$, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }

@@ -16,7 +16,11 @@ final class ImapClient
     private $stream;
     private int $tag = 0;
 
-    public function __construct(private readonly float $timeout = 15.0)
+    /**
+     * @param (\Closure(string $address, float $timeout, resource $context): (resource|false))|null $opener opens the
+     *                                                                                             socket (tests: a scripted server)
+     */
+    public function __construct(private readonly float $timeout = 15.0, private readonly ?\Closure $opener = null)
     {
     }
 
@@ -25,7 +29,11 @@ final class ImapClient
     {
         $scheme = 'ssl' === $encryption ? 'ssl' : 'tcp';
         $context = stream_context_create(['ssl' => ['peer_name' => $host, 'SNI_enabled' => true]]);
-        $stream = @stream_socket_client(\sprintf('%s://%s:%d', $scheme, $host, $port), $errno, $error, $this->timeout, \STREAM_CLIENT_CONNECT, $context);
+        $address = \sprintf('%s://%s:%d', $scheme, $host, $port);
+        $error = '';
+        $stream = null !== $this->opener
+            ? ($this->opener)($address, $this->timeout, $context)
+            : @stream_socket_client($address, $errno, $error, $this->timeout, \STREAM_CLIENT_CONNECT, $context);
         if (false === $stream) {
             throw new ImapException(\sprintf('Cannot connect to %s:%d: %s', $host, $port, $error ?: 'connection failed'));
         }
@@ -49,6 +57,36 @@ final class ImapClient
     {
         try {
             $this->command('LOGIN '.self::quote($username).' '.self::quote($password));
+        } catch (ImapException $e) {
+            throw new ImapException('IMAP authentication failed: '.$e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
+     * SASL XOAUTH2 (Google, Microsoft): the user and an OAuth access token instead of a password.
+     */
+    public function authenticateXOAuth2(string $username, #[\SensitiveParameter] string $accessToken): void
+    {
+        $tag = $this->nextTag();
+        $this->write(\sprintf("%s AUTHENTICATE XOAUTH2 %s\r\n", $tag, base64_encode("user={$username}\1auth=Bearer {$accessToken}\1\1")));
+        try {
+            $line = $this->readLine();
+            if (str_starts_with($line, '+')) {
+                // Error details (base64 JSON): the client answers with an empty line, then the server says NO.
+                $details = base64_decode(trim(substr($line, 1)), true);
+                $this->write("\r\n");
+                try {
+                    $this->readUntilTagged($tag);
+                } catch (ImapException $e) {
+                    throw new ImapException(trim($e->getMessage().' '.($details ?: '')));
+                }
+            } elseif (str_starts_with($line, $tag.' ')) {
+                if (!preg_match('/^'.preg_quote($tag, '/').' OK/i', $line)) {
+                    throw new ImapException(trim(substr($line, \strlen($tag) + 1)));
+                }
+            } else {
+                $this->readUntilTagged($tag);
+            }
         } catch (ImapException $e) {
             throw new ImapException('IMAP authentication failed: '.$e->getMessage(), 0, $e);
         }

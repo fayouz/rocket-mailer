@@ -58,4 +58,22 @@ class MailboxRepository extends ServiceEntityRepository
             ->orderBy('m.name')
             ->getQuery()->getResult();
     }
+
+    /**
+     * Personal mailboxes of the user, or the one with this address.
+     *
+     * @return ($email is null ? list<Mailbox> : ?Mailbox)
+     */
+    public function personalOf(User $user, ?string $email = null): array|Mailbox|null
+    {
+        $qb = $this->createQueryBuilder('m')
+            ->where('m.kind = :kind')->setParameter('kind', Mailbox::KIND_PERSONAL)
+            ->andWhere('m.owner = :owner')->setParameter('owner', $user)
+            ->orderBy('m.name');
+        if (null !== $email) {
+            return $qb->andWhere('m.email = :email')->setParameter('email', mb_strtolower(trim($email)))->setMaxResults(1)->getQuery()->getOneOrNullResult();
+        }
+
+        return $qb->getQuery()->getResult();
+    }
 }

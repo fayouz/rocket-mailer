@@ -21,6 +21,7 @@ use Symfony\Component\Security\Core\Authorization\Voter\Voter;
  * - INBOX_API (mailbox or conversation): list, read and reply, also through an application: the application
  *   itself when the mailbox is attached to it, or an application impersonating a member;
  * - INBOX_MANAGE (mailbox): managers and administrators manage the members.
+ * A personal mailbox: its owner only (its sole member); nobody manages its members, administrators included.
  *
  * @extends Voter<string, Mailbox|Conversation>
  */
@@ -52,7 +53,10 @@ final class MailboxVoter extends Voter
         $mailbox = $subject instanceof Conversation ? $subject->getMailbox() : $subject;
         if (self::API === $attribute && $user instanceof ApplicationUser) {
             // The application itself: only the shared inboxes attached to it.
-            return $mailbox->isEnabled() && $mailbox->isInboxEnabled() && $mailbox->getApplications()->contains($user->getApplication());
+            return !$mailbox->isPersonal() && $mailbox->isEnabled() && $mailbox->isInboxEnabled() && $mailbox->getApplications()->contains($user->getApplication());
+        }
+        if ($mailbox->isPersonal() && (self::MANAGE === $attribute || !$mailbox->isOwnedBy($user instanceof User ? $user : null))) {
+            return false;
         }
         if (!$user instanceof User || (null !== $application && self::API !== $attribute)) {
             return false;

@@ -16,6 +16,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Rocket\Core\Entity\Application;
 use Rocket\Core\Entity\TrackedTrait;
+use Rocket\Core\Entity\User;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -29,6 +30,10 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  * (or a provider, as a Symfony Mailer DSN), keeping a copy of each email in its IMAP "Sent" folder.
  * Offered to the applications it is attached to, and to every user when "availableToUsers".
  * Credentials are encrypted (see MailboxProcessor, SecretBox) and never exposed by the API.
+ *
+ * Kind "shared": created by an administrator. Kind "personal": created by a user for themselves (PersonalMailboxController),
+ * the owner is its only member; administrators see that it exists (metadata), never its content.
+ * Authentication: a password, or OAuth 2 (Google, Microsoft: refresh token encrypted, XOAUTH2 for IMAP and SMTP).
  */
 #[ORM\Entity(repositoryClass: MailboxRepository::class)]
 #[ApiResource(
@@ -36,7 +41,8 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
         new GetCollection(),
         new Get(),
         new Post(processor: MailboxProcessor::class),
-        new Patch(processor: MailboxProcessor::class),
+        // A personal mailbox belongs to its owner (PATCH /api/mailboxes/personal/{id}): admins only see it exists.
+        new Patch(security: "is_granted('ROLE_ADMIN') and object.isShared()", processor: MailboxProcessor::class),
         new Delete(),
     ],
     normalizationContext: ['groups' => ['mailbox:read', 'tracking']],
@@ -49,6 +55,12 @@ class Mailbox
     public const TRANSPORT_SMTP = 'smtp';
     public const TRANSPORT_DSN = 'dsn';
     public const ENCRYPTIONS = ['ssl', 'starttls', 'none'];
+    public const KIND_SHARED = 'shared';
+    public const KIND_PERSONAL = 'personal';
+    public const AUTH_PASSWORD = 'password';
+    public const AUTH_OAUTH_GOOGLE = 'oauth_google';
+    public const AUTH_OAUTH_MICROSOFT = 'oauth_microsoft';
+    public const AUTH_TYPES = [self::AUTH_PASSWORD, self::AUTH_OAUTH_GOOGLE, self::AUTH_OAUTH_MICROSOFT];
 
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
@@ -171,6 +183,35 @@ class Mailbox
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Groups(['mailbox:read'])]
     private ?string $inboxError = null;
+
+    #[ORM\Column(length: 16, options: ['default' => self::KIND_SHARED])]
+    #[Groups(['mailbox:read'])]
+    private string $kind = self::KIND_SHARED;
+
+    /** Owner of a personal mailbox. */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
+    private ?User $owner = null;
+
+    #[ORM\Column(length: 16, options: ['default' => self::AUTH_PASSWORD])]
+    #[Groups(['mailbox:read'])]
+    private string $authType = self::AUTH_PASSWORD;
+
+    /** Detected provider (MailProviderDetector): ovh, gmail, microsoft… */
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['mailbox:read'])]
+    private ?string $provider = null;
+
+    /** Encrypted OAuth refresh token. */
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $oauthRefreshToken = null;
+
+    /** Encrypted OAuth access token (cache), valid until oauthExpiresAt. */
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $oauthAccessToken = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $oauthExpiresAt = null;
 
     /** @var Collection<int, Application> */
     #[ORM\ManyToMany(targetEntity: Application::class)]
@@ -548,6 +589,126 @@ class Mailbox
         return null === $application ? $this->availableToUsers : $this->applications->contains($application);
     }
 
+    public function getKind(): string
+    {
+        return $this->kind;
+    }
+
+    public function isShared(): bool
+    {
+        return self::KIND_SHARED === $this->kind;
+    }
+
+    public function isPersonal(): bool
+    {
+        return self::KIND_PERSONAL === $this->kind;
+    }
+
+    public function getOwner(): ?User
+    {
+        return $this->owner;
+    }
+
+    public function isOwnedBy(?User $user): bool
+    {
+        return null !== $user && null !== $this->owner && $this->owner->getId()->equals($user->getId());
+    }
+
+    /** Makes it the personal mailbox of the user: never offered to other users nor to applications. */
+    public function makePersonal(User $owner): static
+    {
+        $this->kind = self::KIND_PERSONAL;
+        $this->owner = $owner;
+        $this->availableToUsers = false;
+        $this->applications->clear();
+
+        return $this;
+    }
+
+    /** Email of the owner of a personal mailbox (metadata visible to administrators). */
+    #[Groups(['mailbox:read'])]
+    public function getOwnerEmail(): ?string
+    {
+        return $this->owner?->getEmail();
+    }
+
+    public function getAuthType(): string
+    {
+        return $this->authType;
+    }
+
+    public function setAuthType(string $authType): static
+    {
+        if (!\in_array($authType, self::AUTH_TYPES, true)) {
+            throw new \InvalidArgumentException(\sprintf('Unknown authentication type "%s".', $authType));
+        }
+        $this->authType = $authType;
+
+        return $this;
+    }
+
+    public function isOAuth(): bool
+    {
+        return self::AUTH_PASSWORD !== $this->authType;
+    }
+
+    public function getProvider(): ?string
+    {
+        return $this->provider;
+    }
+
+    public function setProvider(?string $provider): static
+    {
+        $this->provider = $provider;
+
+        return $this;
+    }
+
+    public function getEncryptedOAuthRefreshToken(): ?string
+    {
+        return $this->oauthRefreshToken;
+    }
+
+    public function getEncryptedOAuthAccessToken(): ?string
+    {
+        return $this->oauthAccessToken;
+    }
+
+    public function getOAuthExpiresAt(): ?\DateTimeImmutable
+    {
+        return $this->oauthExpiresAt;
+    }
+
+    /** OAuth connected: a refresh token is stored. */
+    #[Groups(['mailbox:read'])]
+    public function getOauthConnected(): bool
+    {
+        return null !== $this->oauthRefreshToken;
+    }
+
+    /**
+     * Stores encrypted OAuth tokens (a null refresh token keeps the current one: providers do not always rotate it).
+     */
+    public function storeOAuthTokens(?string $encryptedRefreshToken, ?string $encryptedAccessToken, ?\DateTimeImmutable $expiresAt): static
+    {
+        if (null !== $encryptedRefreshToken) {
+            $this->oauthRefreshToken = $encryptedRefreshToken;
+        }
+        $this->oauthAccessToken = $encryptedAccessToken;
+        $this->oauthExpiresAt = $expiresAt;
+
+        return $this;
+    }
+
+    /** Switches to a password: forgets the OAuth tokens. */
+    public function clearOAuth(): static
+    {
+        $this->oauthRefreshToken = $this->oauthAccessToken = null;
+        $this->oauthExpiresAt = null;
+
+        return $this;
+    }
+
     /**
      * Encrypts the plain secrets received from the API (called by MailboxProcessor).
      *
@@ -572,6 +733,9 @@ class Mailbox
     #[Assert\Callback]
     public function validateTransport(ExecutionContextInterface $context): void
     {
+        if ($this->isOAuth() && self::TRANSPORT_SMTP !== $this->transport) {
+            $context->buildViolation('An OAuth mailbox sends through SMTP.')->atPath('transport')->addViolation();
+        }
         if (self::TRANSPORT_SMTP === $this->transport && null === $this->smtpHost) {
             $context->buildViolation('The SMTP server is required.')->atPath('smtpHost')->addViolation();
         }

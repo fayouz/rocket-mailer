@@ -26,3 +26,9 @@ services:
 when@test:
     services:
         App\Tests\Support\HttpMock: ~
+        # No network in the tests: scripted IMAP/SMTP servers, fixed MX records.
+        App\Mailbox\MailServers:
+            class: App\Tests\Support\FakeMailServers
+            autowire: true
+        App\Mailbox\MxResolver:
+            class: App\Tests\Support\FakeMxResolver
