@@ -9,7 +9,7 @@ Envoi d'emails en texte enrichi, templates d'email visuels, et composeur embarqu
 | `integrations/` | Clients pour les applications appelantes : layer Nuxt (`integrations/nuxt`) et bundle Symfony (`integrations/symfony`), publiés dans des dépôts miroirs par `.github/workflows/split.yml` |
 | `docs/` | Site de documentation (Nuxt UI + Nuxt Content), avec le changelog sur `/changelog` : `cd docs && npm install && npm run dev`, puis http://localhost:3001 |
 
-Le socle commun (comptes, LDAP, SSO, applications, tableau de bord, mises à jour, modes autonome et suite) vient de **[rocket-core](https://github.com/fayouz/rocket-core)** : le bundle Symfony `rocket/core-bundle` (Composer) et le layer Nuxt `@rocket/core` (npm). Rocket Mailer n'y ajoute que son métier : envois, templates, layouts, boîtes d'envoi, adresses d'expédition, pièces jointes et composeur embarqué. Pour travailler sur les deux à la fois : `ROCKET_CORE_LAYER=../../rocket-core/nuxt npm run dev` côté front, et un dépôt `path` Composer côté backend.
+Le socle commun (comptes, LDAP, SSO, applications, tableau de bord, mises à jour, modes autonome et suite) vient de **[rocket-core](https://github.com/fayouz/rocket-core)** : le bundle Symfony `rocket/core-bundle` (Composer) et le layer Nuxt `@rocket/core` (npm). Rocket Mailer n'y ajoute que son métier : envois, templates, layouts, boîtes d'envoi et boîtes partagées, adresses d'expédition, pièces jointes et composeur embarqué. Pour travailler sur les deux à la fois : `ROCKET_CORE_LAYER=../../rocket-core/nuxt npm run dev` côté front, et un dépôt `path` Composer côté backend.
 
 ## Démarrage rapide
 
@@ -122,6 +122,11 @@ Sécurité du composeur embarqué :
 - Administration → **Boîtes d'envoi** : de vrais comptes email (SMTP, ou fournisseur par DSN : Brevo, SES, Mailjet, SendGrid, Postmark, Mailgun), avec copie de chaque email dans leur dossier « Envoyés » par IMAP.
 - Rattachées à des applications, elles apparaissent dans la liste « De » de leur composeur (ou pour tous les utilisateurs). API : `mailbox` dans `POST /api/emails` ; widget : `setDraft({ mailbox })`.
 - Mots de passe chiffrés en base avec `MAILBOX_ENCRYPTION_KEY` (vide : dérivée de `APP_SECRET`).
+
+### Boîtes partagées
+- Une boîte d'envoi peut **recevoir** : ses nouveaux messages IMAP sont relevés (worker toutes les 5 minutes, bouton **Relever**, `app:inbox:fetch`) en lecture seule et regroupés en **conversations** (`In-Reply-To`/`References`, sinon sujet et correspondant).
+- Page **Boîtes partagées** : non lus par membre, recherche, filtres (ouvertes, fermées, les miennes), fil, **réponse** depuis la boîte (en-têtes de fil, copie dans « Envoyés »), **assignation**, **fermeture**, **notes internes**.
+- Membres (`member`) et responsables (`manager`) par boîte ; les membres envoient aussi depuis la boîte dans le composeur. HTML nettoyé côté serveur, images distantes bloquées par défaut. Variables : `INBOX_FETCH_INTERVAL`, `INBOX_MAX_MESSAGE_SIZE`. API : `/api/inbox/…`.
 
 ### Pièces jointes
 - Dans le composeur (application et widget), avec le bouton **Joindre des fichiers** ou par glisser-déposer : 10 fichiers, 10 Mo par fichier et 25 Mo par email par défaut. Les exécutables et scripts sont refusés.

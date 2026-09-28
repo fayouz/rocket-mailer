@@ -11,6 +11,7 @@ use App\Repository\MailboxRepository;
 use App\Sender\SenderPolicy;
 use App\Template\Placeholders;
 use Rocket\Core\Entity\Application;
+use Rocket\Core\Entity\User;
 use Rocket\Core\Security\ActorContext;
 use Rocket\Core\Security\Roles;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -44,7 +45,7 @@ final class EmailSendProcessor implements ProcessorInterface
         $user = $this->actor->requireUser();
         $application = $this->actor->getApplication();
         // First: resolving may flush (first-run seeding of the sender addresses).
-        $mailbox = $this->resolveMailbox($data, $application);
+        $mailbox = $this->resolveMailbox($data, $user, $application);
         if (null !== $mailbox) {
             $data->setMailbox($mailbox);
             $data->applyFrom($mailbox->toAddress());
@@ -86,9 +87,9 @@ final class EmailSendProcessor implements ProcessorInterface
 
     /**
      * The sending mailbox: given explicitly ("mailbox"), or designated by its address in "from".
-     * Through an application, only its own mailboxes; otherwise, those available to all users.
+     * Through an application, only its own mailboxes; otherwise, those available to all users and the user's shared inboxes.
      */
-    private function resolveMailbox(Email $email, ?Application $application): ?Mailbox
+    private function resolveMailbox(Email $email, User $user, ?Application $application): ?Mailbox
     {
         $requested = null;
         if (null !== $email->getRequestedFrom() && '' !== trim($email->getRequestedFrom())) {
@@ -104,7 +105,7 @@ final class EmailSendProcessor implements ProcessorInterface
             if (null === $requested) {
                 return null;
             }
-            foreach ($this->mailboxes->usableBy($application) as $candidate) {
+            foreach (null === $application ? $this->mailboxes->usableByUser($user) : $this->mailboxes->usableBy($application) as $candidate) {
                 if ($candidate->getEmail() === $requested) {
                     return $candidate;
                 }
@@ -113,7 +114,10 @@ final class EmailSendProcessor implements ProcessorInterface
             return null;
         }
 
-        if (!$mailbox->isUsableBy($application)) {
+        $usable = null === $application
+            ? \in_array($mailbox, $this->mailboxes->usableByUser($user), true)
+            : $mailbox->isUsableBy($application);
+        if (!$usable) {
             throw new UnprocessableEntityHttpException(\sprintf('The mailbox "%s" cannot be used here.', $mailbox->getName()));
         }
         if (null !== $requested && $requested !== $mailbox->getEmail()) {

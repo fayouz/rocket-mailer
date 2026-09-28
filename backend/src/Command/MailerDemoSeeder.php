@@ -5,7 +5,10 @@ namespace App\Command;
 use App\Entity\ApplicationSender;
 use App\Entity\EmailLayout;
 use App\Entity\EmailTemplate;
+use App\Entity\ConversationNote;
 use App\Entity\Mailbox;
+use App\Entity\MailboxMember;
+use App\Inbox\InboxFetcher;
 use App\Mailbox\SecretBox;
 use App\Repository\ApplicationSenderRepository;
 use App\Repository\EmailLayoutRepository;
@@ -23,7 +26,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 /**
  * Demo data of Rocket Mailer: the demo application (holding DEMO_APP_TOKEN) becomes "Démo CRM", the third-party
  * application of demo/host that embeds the composer, with its own sender and sending mailbox; "Rocket Cloud", linked
- * to the Rocket Auth client rocket-cloud (suite); shared templates and a layout.
+ * to the Rocket Auth client rocket-cloud (suite); shared templates and a layout; the shared inbox « Contact »
+ * (members admin and alice) with a few conversations.
  */
 final class MailerDemoSeeder implements DemoSeederInterface
 {
@@ -36,6 +40,7 @@ final class MailerDemoSeeder implements DemoSeederInterface
         private readonly EmailLayoutRepository $layouts,
         private readonly SecretBox $secrets,
         private readonly ColorPaletteRepository $palettes,
+        private readonly InboxFetcher $inbox,
         #[Autowire(env: 'DEMO_APP_TOKEN')] private readonly string $demoAppToken,
         #[Autowire(env: 'DEMO_HOST_ORIGIN')] private readonly string $demoHostOrigin,
         #[Autowire(env: 'DEMO_MAILBOX_SMTP')] private readonly string $demoMailboxSmtp,
@@ -140,9 +145,57 @@ final class MailerDemoSeeder implements DemoSeederInterface
                 ->setOwner($admin));
         }
 
+        $this->seedSharedInbox($users);
+
         if (null !== $application) {
             $io->text(\sprintf('Application « %s » (%s) : Démo CRM, origine autorisée %s', $application->getName(), $application->getId(), $this->demoHostOrigin));
         }
+    }
+
+    /**
+     * The shared inbox « Contact »: replies leave through Mailpit when configured; in demo mode, new messages come
+     * from the in-memory INBOX (never a real IMAP server).
+     *
+     * @param array<string, \Rocket\Core\Entity\User> $users
+     */
+    private function seedSharedInbox(array $users): void
+    {
+        if (null !== $this->mailboxes->findOneBy(['email' => 'contact@example.org']) || !isset($users['admin@example.org'], $users['alice@example.org'])) {
+            return;
+        }
+        [$admin, $alice] = [$users['admin@example.org'], $users['alice@example.org']];
+
+        $mailbox = (new Mailbox())->setName('Contact')->setEmail('contact@example.org')->setDisplayName('Équipe Contact')
+            ->setImapHost('imap.demo.invalid')->setImapEncryption('none')->setImapPort(143)->setInboxEnabled(true);
+        if ('' !== $this->demoMailboxSmtp) {
+            [$smtpHost, $smtpPort] = explode(':', $this->demoMailboxSmtp) + [1 => '1025'];
+            $mailbox->setSmtpHost($smtpHost)->setSmtpPort((int) $smtpPort)->setSmtpEncryption('none');
+        } else {
+            $mailbox->setTransport(Mailbox::TRANSPORT_DSN)->setDsn('null://null');
+        }
+        $mailbox->setImapPassword('demo')->sealSecrets($this->secrets->encrypt(...));
+        $this->em->persist($mailbox);
+        $this->em->persist(new MailboxMember($mailbox, $admin, MailboxMember::ROLE_MANAGER));
+        $this->em->persist(new MailboxMember($mailbox, $alice, MailboxMember::ROLE_MEMBER));
+        $this->em->flush();
+
+        $message = static fn (string $id, string $from, string $subject, string $body, string $extra = '') => "From: {$from}\r\nTo: Contact <contact@example.org>\r\nSubject: {$subject}\r\nMessage-ID: <{$id}@demo.example>\r\n{$extra}MIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n{$body}";
+        $import = fn (string $raw, string $ago) => $this->inbox->import($mailbox, $raw, null, null, new \DateTimeImmutable($ago));
+
+        $quote = $import($message('devis-1', 'Julie Martin <julie.martin@example.com>', 'Demande de devis pour 20 postes', '<p>Bonjour,</p><p>Nous souhaiterions un devis pour <strong>20 postes</strong> avec installation.</p><p>Cordialement,<br>Julie Martin</p>'), '-2 days');
+        $import($message('devis-2', 'Julie Martin <julie.martin@example.com>', 'Re: Demande de devis pour 20 postes', '<p>Petite précision : livraison souhaitée avant fin octobre.</p>', "In-Reply-To: <devis-1@demo.example>\r\nReferences: <devis-1@demo.example>\r\n"), '-1 day');
+        $quote?->getConversation()->setAssignee($alice);
+        if (null !== $quote) {
+            $this->em->persist(new ConversationNote($quote->getConversation(), $admin, 'Client important : proposer la remise volume.'));
+        }
+
+        $import($message('newsletter-1', 'Actualités Fournisseur <news@supplier.example>', 'Nos nouveautés de la rentrée', '<table width="100%"><tr><td style="background:#0f766e;color:#fff;padding:16px">Fournisseur</td></tr><tr><td><img src="https://placehold.co/600x120/png" alt="Bannière"><p>Découvrez nos nouveautés.</p><script>alert("bloqué")</script></td></tr></table>'), '-5 hours');
+        $invoice = $import($message('facture-1', 'Comptabilité Client <compta@client.example>', 'Facture F-2026-118 en double ?', '<p>Bonjour, nous avons reçu deux fois la facture F-2026-118. Pouvez-vous vérifier ?</p>'), '-3 days');
+        $invoice?->getConversation()->setStatus('closed');
+        $import($message('rdv-1', 'Marc Petit <marc.petit@example.com>', 'Rendez-vous jeudi', '<p>Bonjour, je confirme notre rendez-vous de jeudi 10 h.</p>'), '-40 minutes');
+
+        $mailbox->markInboxFetched(1, 0);
+        $this->em->flush();
     }
 
     /** @return list<array{string, string, string, string, list<array{name: string, label: string, defaultValue?: string}>}> */

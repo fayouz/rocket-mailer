@@ -6,6 +6,13 @@ Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changel
 
 ### Ajouté
 
+- **Boîtes partagées** : une boîte d'envoi peut aussi recevoir, et son équipe traite les messages ensemble :
+  - réception activée par boîte (Administration → Boîtes d'envoi) ; le worker relève la boîte de réception IMAP toutes les 5 minutes (`INBOX_FETCH_INTERVAL`), en lecture seule et par UID, ainsi que le bouton **Relever** et la commande `app:inbox:fetch` ; messages jusqu'à 25 Mo (`INBOX_MAX_MESSAGE_SIZE`) ;
+  - **membres** et **responsables** par boîte (bouton **Membres**) : les membres lisent, répondent et envoient depuis la boîte dans le composeur ; les responsables gèrent aussi les membres ;
+  - page **Boîtes partagées** : conversations regroupées par `In-Reply-To`/`References` (sinon sujet et correspondant), non lus par membre, recherche, filtres, **réponse** depuis la boîte (en-têtes de fil, copie dans « Envoyés »), **assignation**, **fermeture**, **notes internes** ;
+  - HTML reçu nettoyé côté serveur (symfony/html-sanitizer), images distantes bloquées par défaut, affichage isolé, pièces jointes toujours téléchargées ;
+  - API `/api/inbox/…` ; démo : boîte partagée « Contact » (admin responsable, alice membre) alimentée par une boîte de réception en mémoire.
+
 - **Authentification unique (OpenID Connect)** : nouveau type de serveur d'authentification, pour se connecter avec Rocket Auth ou tout fournisseur OpenID Connect :
   - bouton **Se connecter avec …** sur la page de connexion, pour chaque fournisseur actif ;
   - flux *authorization code* avec PKCE, `state` et `nonce`. L'API vérifie le jeton d'identité (signature RS256 via JWKS, émetteur, audience, expiration) ;

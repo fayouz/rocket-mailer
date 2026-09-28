@@ -55,7 +55,7 @@ class MailboxConnector
      */
     public function archive(Mailbox $mailbox, string $rawMessage): string
     {
-        $client = $this->imap($mailbox);
+        $client = $this->openImap($mailbox);
         try {
             $folder = $client->resolveSentFolder($mailbox->getImapSentFolder());
             $client->append($folder, $rawMessage);
@@ -94,7 +94,7 @@ class MailboxConnector
 
         if ($mailbox->isImapEnabled()) {
             try {
-                $client = $this->imap($mailbox);
+                $client = $this->openImap($mailbox);
                 try {
                     $folder = $client->resolveSentFolder($mailbox->getImapSentFolder());
                     if (isset($sent)) {
@@ -129,7 +129,7 @@ class MailboxConnector
      */
     public function checkImap(Mailbox $mailbox): string
     {
-        $client = $this->imap($mailbox);
+        $client = $this->openImap($mailbox);
         try {
             return \sprintf('Connexion IMAP réussie, dossier « %s ».', ImapClient::decodeName($client->resolveSentFolder($mailbox->getImapSentFolder())));
         } finally {
@@ -148,7 +148,8 @@ class MailboxConnector
         return 'Connexion et authentification SMTP réussies.';
     }
 
-    private function imap(Mailbox $mailbox): ImapClient
+    /** Connected and logged-in IMAP client of the mailbox; the caller logs out. */
+    public function openImap(Mailbox $mailbox): ImapClient
     {
         $username = $mailbox->getImapUsername() ?? $mailbox->getSmtpUsername() ?? $mailbox->getEmail();
         $encrypted = $mailbox->getEncryptedImapPassword() ?? $mailbox->getEncryptedSmtpPassword();

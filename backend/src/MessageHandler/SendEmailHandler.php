@@ -5,6 +5,7 @@ namespace App\MessageHandler;
 use App\Attachment\AttachmentStorage;
 use App\Mailbox\MailboxConnector;
 use Psr\Log\LoggerInterface;
+use App\Entity\Email;
 use App\Enum\EmailStatus;
 use App\Message\SendEmailMessage;
 use App\Repository\EmailRepository;
@@ -28,6 +29,22 @@ final class SendEmailHandler
     ) {
     }
 
+    /** Replies of a shared inbox conversation: their Message-ID and the headers threading them (RFC 5322, 3.6.4). */
+    public static function addThreadingHeaders(MimeEmail $mime, Email $email): void
+    {
+        if (null === $email->getMessageId()) {
+            return;
+        }
+        $headers = $mime->getHeaders();
+        $headers->addIdHeader('Message-ID', trim($email->getMessageId(), '<>'));
+        if (null !== $email->getInReplyTo()) {
+            $headers->addIdHeader('In-Reply-To', trim($email->getInReplyTo(), '<>'));
+        }
+        if ([] !== $email->getReferences()) {
+            $headers->addIdHeader('References', array_map(static fn (string $id) => trim($id, '<>'), $email->getReferences()));
+        }
+    }
+
     public function __invoke(SendEmailMessage $message): void
     {
         $email = $this->emails->find($message->emailId);
@@ -44,6 +61,7 @@ final class SendEmailHandler
             ->to(...$email->getTo())
             ->cc(...$email->getCc())
             ->bcc(...$email->getBcc());
+        self::addThreadingHeaders($mime, $email);
 
         foreach ($email->getAttachments() as $attachment) {
             $path = $this->storage->path($attachment);

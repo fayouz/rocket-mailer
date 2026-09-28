@@ -19,6 +19,7 @@ export default defineAppConfig({
     navigation: [
       { label: 'Messagerie', type: 'label' },
       { label: 'Nouveau message', icon: 'i-lucide-send', to: '/compose' },
+      { label: 'Boîtes partagées', icon: 'i-lucide-messages-square', to: '/inbox' },
       { label: 'Mes envois', icon: 'i-lucide-inbox', to: '/emails', exact: true },
       { label: 'Tous les envois', icon: 'i-lucide-mails', to: '/emails/all', admin: true },
       { label: 'Templates', icon: 'i-lucide-layout-template', to: '/templates' },

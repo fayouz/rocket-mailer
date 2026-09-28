@@ -31,6 +31,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Entity(repositoryClass: EmailRepository::class)]
 #[ORM\Index(fields: ['status'])]
 #[ORM\Index(fields: ['createdAt'])]
+#[ORM\Index(fields: ['messageId'])]
 #[ApiResource(
     operations: [
         new GetCollection(
@@ -102,6 +103,22 @@ class Email
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Groups(['email:read'])]
     private ?string $archiveError = null;
+
+    /** Shared inbox conversation this email replies to (see InboxReplier). */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Conversation $conversation = null;
+
+    /** Message-ID set on sending (replies of a conversation), with its angle brackets. */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $messageId = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $inReplyTo = null;
+
+    /** @var list<string>|null */
+    #[ORM\Column(name: 'reference_ids', type: Types::JSON, nullable: true)]
+    private ?array $references = null;
 
     /** @var list<string> */
     #[ORM\Column(name: 'recipients_to')]
@@ -312,6 +329,42 @@ class Email
         $this->mailboxName = $mailbox?->getName();
 
         return $this;
+    }
+
+    public function getConversation(): ?Conversation
+    {
+        return $this->conversation;
+    }
+
+    /**
+     * Makes this email a reply in a conversation: threading headers, sent with the Message-ID given.
+     *
+     * @param list<string> $references
+     */
+    public function replyIn(Conversation $conversation, string $messageId, ?string $inReplyTo, array $references): static
+    {
+        $this->conversation = $conversation;
+        $this->messageId = $messageId;
+        $this->inReplyTo = $inReplyTo;
+        $this->references = $references;
+
+        return $this;
+    }
+
+    public function getMessageId(): ?string
+    {
+        return $this->messageId;
+    }
+
+    public function getInReplyTo(): ?string
+    {
+        return $this->inReplyTo;
+    }
+
+    /** @return list<string> */
+    public function getReferences(): array
+    {
+        return $this->references ?? [];
     }
 
     public function getMailboxName(): ?string

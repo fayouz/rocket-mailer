@@ -30,6 +30,18 @@ final class AttachmentStorage
         return $this->directory.\DIRECTORY_SEPARATOR.$attachment->getStorageName();
     }
 
+    /** Stores a received file (shared inbox) under its storage name. */
+    public function storeContent(string $storageName, string $content): void
+    {
+        $this->filesystem->mkdir($this->directory, 0o750);
+        $this->filesystem->dumpFile($this->pathOf($storageName), $content);
+    }
+
+    public function pathOf(string $storageName): string
+    {
+        return $this->directory.\DIRECTORY_SEPARATOR.basename($storageName);
+    }
+
     public function delete(Attachment $attachment): void
     {
         $this->filesystem->remove($this->path($attachment));

@@ -64,6 +64,23 @@ for i in $(seq 1 30); do
   [ "$i" = 30 ] && exit 1
   sleep 2
 done
+# Shared inbox « Contact » (in-memory INBOX in demo mode): alice replies from the mailbox, threaded, through Mailpit
+ALICE_INBOX=$(curl -fsS -X POST $FRONT/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -r .token)
+INBOX_ID=$(curl -fsS $FRONT/api/inbox/mailboxes -H "Authorization: Bearer $ALICE_INBOX" | jq -r '.[] | select(.name == "Contact") | .id')
+curl -fsS -X POST "$FRONT/api/inbox/mailboxes/$INBOX_ID/fetch" -H "Authorization: Bearer $ALICE_INBOX" | jq -e '.fetched == 0'
+CONVERSATION_ID=$(curl -fsS "$FRONT/api/inbox/mailboxes/$INBOX_ID/conversations?q=devis" -H "Authorization: Bearer $ALICE_INBOX" \
+  | jq -r '.[0].id')
+curl -fsS "$FRONT/api/inbox/conversations/$CONVERSATION_ID" -H "Authorization: Bearer $ALICE_INBOX" | jq -e '[.items[].type] == ["inbound", "inbound", "note"]'
+curl -fsS -X POST "$FRONT/api/inbox/conversations/$CONVERSATION_ID/reply" -H "Authorization: Bearer $ALICE_INBOX" \
+  -H 'Content-Type: application/json' -d '{"htmlBody":"<p>CI inbox reply</p>"}' | jq -e '.to == ["julie.martin@example.com"]'
+for i in $(seq 1 30); do
+  REPLY_ID=$(curl -fsS http://localhost:8025/api/v1/messages | jq -r '.messages[] | select(.Subject == "Re: Demande de devis pour 20 postes") | .ID' | head -1)
+  [ -n "$REPLY_ID" ] && break
+  [ "$i" = 30 ] && exit 1
+  sleep 2
+done
+curl -fsS "http://localhost:8025/api/v1/message/$REPLY_ID/headers" | jq -e '."In-Reply-To" == ["<devis-2@demo.example>"]'
 # Sending goes through the async worker and reaches Mailpit
 ALICE=$(curl -fsS -X POST $FRONT/api/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.org","password":"demo-alice-password"}' | jq -r .token)
