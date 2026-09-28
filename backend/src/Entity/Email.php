@@ -32,6 +32,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Index(fields: ['status'])]
 #[ORM\Index(fields: ['createdAt'])]
 #[ORM\Index(fields: ['messageId'])]
+#[ORM\Index(fields: ['externalRef'])]
 #[ApiResource(
     operations: [
         new GetCollection(
@@ -41,6 +42,7 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
                 'status' => new QueryParameter(filter: new ExactFilter(), property: 'status', schema: ['type' => 'string', 'enum' => ['queued', 'sent', 'failed']]),
                 'sender' => new QueryParameter(filter: new ExactFilter(), property: 'sender', description: 'User id', constraints: [new Assert\Uuid()]),
                 'application' => new QueryParameter(filter: new ExactFilter(), property: 'application', description: 'Application id', constraints: [new Assert\Uuid()]),
+                'externalRef' => new QueryParameter(filter: new ExactFilter(), property: 'externalRef', description: 'Reference given by the calling application (e.g. a booking id)'),
                 'createdAt' => new QueryParameter(filter: new DateFilter(), property: 'createdAt', description: 'createdAt[after]=2026-09-01&createdAt[before]=2026-09-30'),
             ],
         ),
@@ -62,7 +64,8 @@ class Email
     private Uuid $id;
 
     #[ORM\ManyToOne]
-    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
+    /** Null for a reply sent by an application acting for itself (no user). */
+    #[ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
     #[Groups(['email:list'])]
     private ?User $sender = null;
 
@@ -108,6 +111,12 @@ class Email
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?Conversation $conversation = null;
+
+    /** Reference of the calling application (e.g. a booking id), to find its emails and conversations again. */
+    #[ORM\Column(length: 190, nullable: true)]
+    #[Assert\Length(max: 190)]
+    #[Groups(['email:list', 'email:write'])]
+    private ?string $externalRef = null;
 
     /** Message-ID set on sending (replies of a conversation), with its angle brackets. */
     #[ORM\Column(length: 255, nullable: true)]
@@ -207,7 +216,20 @@ class Email
         return $this->sender;
     }
 
-    public function setSender(User $sender): static
+    public function getExternalRef(): ?string
+    {
+        return $this->externalRef;
+    }
+
+    public function setExternalRef(?string $externalRef): static
+    {
+        $externalRef = null === $externalRef ? null : trim($externalRef);
+        $this->externalRef = '' === $externalRef ? null : $externalRef;
+
+        return $this;
+    }
+
+    public function setSender(?User $sender): static
     {
         $this->sender = $sender;
 

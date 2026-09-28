@@ -6,6 +6,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Entity\Email;
 use App\Entity\Mailbox;
+use App\Inbox\InboxReplier;
 use App\Message\SendEmailMessage;
 use App\Repository\MailboxRepository;
 use App\Sender\SenderPolicy;
@@ -36,6 +37,7 @@ final class EmailSendProcessor implements ProcessorInterface
         private readonly MessageBusInterface $bus,
         private readonly SenderPolicy $senders,
         private readonly MailboxRepository $mailboxes,
+        private readonly InboxReplier $replier,
         #[Autowire(env: 'int:ATTACHMENTS_MAX_TOTAL_SIZE')] private readonly int $maxTotalAttachmentSize,
     ) {
     }
@@ -78,6 +80,7 @@ final class EmailSendProcessor implements ProcessorInterface
 
         $data->setSender($user);
         $data->setApplication($application);
+        $this->replier->startConversation($data);
 
         $email = $this->persist->process($data, $operation, $uriVariables, $context);
         $this->bus->dispatch(new SendEmailMessage($email->getId()->toRfc4122()));

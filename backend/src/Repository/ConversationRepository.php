@@ -24,7 +24,7 @@ class ConversationRepository extends ServiceEntityRepository
      *
      * @return list<array{0: Conversation, unread: bool}>
      */
-    public function search(Mailbox $mailbox, User $user, ?string $status, bool $mine, ?string $query, int $limit = 100): array
+    public function search(Mailbox $mailbox, ?User $user, ?string $status, bool $mine, ?string $query, int $limit = 100, ?string $participant = null, ?string $externalRef = null): array
     {
         $qb = $this->createQueryBuilder('c')
             ->addSelect('CASE WHEN r.id IS NULL OR r.readAt < c.lastMessageAt THEN true ELSE false END AS unread')
@@ -39,7 +39,21 @@ class ConversationRepository extends ServiceEntityRepository
             $qb->andWhere('c.status = :status')->setParameter('status', $status);
         }
         if ($mine) {
-            $qb->andWhere('c.assignee = :user');
+            $qb->andWhere(null === $user ? '1 = 0' : 'c.assignee = :user');
+        }
+        if (null !== $externalRef) {
+            $qb->andWhere('c.externalRef = :externalRef')->setParameter('externalRef', $externalRef);
+        }
+        if (null !== $participant) {
+            // Participants: a JSON list of lowercase addresses; exact match through PostgreSQL's jsonb containment.
+            $ids = $this->getEntityManager()->getConnection()->fetchFirstColumn(
+                'SELECT id FROM conversation WHERE mailbox_id = :mailbox AND participants::jsonb @> jsonb_build_array(CAST(:participant AS text))',
+                ['mailbox' => $mailbox->getId()->toRfc4122(), 'participant' => mb_strtolower($participant)],
+            );
+            if ([] === $ids) {
+                return [];
+            }
+            $qb->andWhere('c.id IN (:ids)')->setParameter('ids', $ids);
         }
         if (null !== $query && '' !== trim($query)) {
             $like = '%'.addcslashes(mb_strtolower(trim($query)), '%_\\').'%';
@@ -51,7 +65,8 @@ class ConversationRepository extends ServiceEntityRepository
                 ->setParameter('q', $like);
         }
 
-        return array_map(static fn (array $row) => [0 => $row[0], 'unread' => (bool) $row['unread']], $qb->getQuery()->getResult());
+        // Without a user (an application for itself), nothing is "unread".
+        return array_map(static fn (array $row) => [0 => $row[0], 'unread' => null !== $user && (bool) $row['unread']], $qb->getQuery()->getResult());
     }
 
     /** Unread open conversations of a mailbox for the user. */

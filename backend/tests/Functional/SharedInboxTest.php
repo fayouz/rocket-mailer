@@ -118,9 +118,13 @@ final class SharedInboxTest extends WebTestCase
         $this->api('GET', "/api/inbox/conversations/{$conversationId}", authorization: $this->bob);
         $this->assertStatus(403);
 
-        // Never through an application, even impersonating a member.
+        // Through an application: only impersonating a member (see ApplicationInboxTest), never for the members only features.
         [, $token] = $this->createApplication();
         $this->api('GET', "/api/inbox/conversations/{$conversationId}", authorization: 'Bearer '.$token, headers: ['X-Impersonate-User' => 'alice@example.org']);
+        $this->assertStatus(200);
+        $this->api('GET', "/api/inbox/conversations/{$conversationId}", authorization: 'Bearer '.$token, headers: ['X-Impersonate-User' => 'bob@example.org']);
+        $this->assertStatus(403);
+        $this->api('PATCH', "/api/inbox/conversations/{$conversationId}", ['status' => 'closed'], 'Bearer '.$token, ['X-Impersonate-User' => 'alice@example.org']);
         $this->assertStatus(403);
 
         // Members send from the mailbox; the others cannot.
