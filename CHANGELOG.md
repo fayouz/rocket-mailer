@@ -2,6 +2,22 @@
 
 Toutes les évolutions notables de Rocket Mailer. Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le projet respecte le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Ajouté
+
+- **Boîtes partagées pour les applications** (Rocket PMS, CRM…) : lister les conversations, lire un fil et répondre dans le fil :
+  - l'application **pour elle-même** (jeton `rma_…`, ou en mode suite jeton Rocket Auth *client credentials* d'audience `rocket-mailer`) dans les boîtes partagées qui lui sont rattachées ; ou **au nom d'un membre** (`X-Impersonate-User`) ;
+  - `GET /api/inbox/mailboxes`, `GET /api/inbox/mailboxes/{id}/conversations`, `GET /api/inbox/conversations/{id}`, `POST /api/inbox/conversations/{id}/reply` ; le reste (assignation, fermeture, notes, relève, pièces jointes, membres) et le composeur embarqué restent refusés ; une lecture par l'API ne marque rien comme lu.
+- Filtres `?participant=<email>` (adresse exacte, casse ignorée) et `?externalRef=` sur `GET /api/inbox/mailboxes/{id}/conversations`.
+- **`externalRef`** (190 caractères) sur les emails (`POST /api/emails`, filtre `GET /api/emails?externalRef=`) et les conversations (fixée par une réponse qui la donne, reprise par les réponses suivantes) ; un email envoyé depuis une boîte partagée avec `externalRef` ouvre une conversation fermée, où se rangent les réponses.
+- En-tête **`Idempotency-Key`** sur `POST /api/emails` et `POST /api/inbox/conversations/{id}/reply` : même clé et même requête du même appelant dans les 24 h → première réponse rejouée (`Idempotent-Replayed: true`) ; autre contenu → `409`.
+- Documentation : page *API → Boîtes partagées* ; scénario de démo (CRM au nom d'alice, filtre, réponse rejouée).
+
+### Modifié
+
+- Une réponse envoyée par une application pour elle-même n'a pas d'utilisateur : `email.sender` devient facultatif (migration), `author` vaut `null`.
+
 ## [0.7.0] - 2026-09-28
 
 ### Ajouté
